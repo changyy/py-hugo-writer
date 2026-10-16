@@ -1,0 +1,43 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        # Oldest supported, the release that renamed the image render hook setting, and the newest.
+        hugo-version: ["0.128.0", "0.148.2", "latest"]
+        python-version: ["3.12"]
+        include:
+          - hugo-version: "latest"
+            python-version: "3.11"
+          - hugo-version: "latest"
+            python-version: "3.13"
+
+    name: hugo ${{ matrix.hugo-version }} / python ${{ matrix.python-version }}
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: astral-sh/setup-uv@v6
+        with:
+          python-version: ${{ matrix.python-version }}
+
+      - uses: peaceiris/actions-hugo@v3
+        with:
+          hugo-version: ${{ matrix.hugo-version }}
+          extended: true
+
+      - name: Run tests
+        run: |
+          hugo version
+          uv sync --locked
+          uv run pytest -q

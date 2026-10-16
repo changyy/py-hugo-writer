@@ -1,0 +1,51 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "hugo-writer"
+# Version is read dynamically from src/hugo_writer/_version.py (single source of
+# truth). Scheme: 1.YYYYmmdd.1HHmmss. See [tool.hatch.version] below.
+dynamic = ["version"]
+description = "A local, browser-based writing tool for Hugo sites: list posts, edit Markdown, drop in images (auto-resized), preview with the real theme."
+readme = "README.md"
+requires-python = ">=3.11"
+license = { text = "MIT" }
+authors = [{ name = "Yuan-Yi Chang", email = "changyy.csie@gmail.com" }]
+keywords = ["hugo", "blog", "markdown", "editor", "static-site", "cms"]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Environment :: Web Environment",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3 :: Only",
+    "Topic :: Internet :: WWW/HTTP :: Site Management",
+    "Topic :: Text Editors",
+]
+dependencies = [
+    # Resizing and re-encoding images dropped into the editor.
+    "Pillow>=10",
+]
+
+[project.urls]
+Homepage = "https://github.com/changyy/py-hugo-writer"
+Repository = "https://github.com/changyy/py-hugo-writer"
+Issues = "https://github.com/changyy/py-hugo-writer/issues"
+Changelog = "https://github.com/changyy/py-hugo-writer/blob/main/CHANGELOG.md"
+
+[project.scripts]
+hugo-writer = "hugo_writer.cli:main"
+
+[dependency-groups]
+dev = ["pytest>=8"]
+
+[tool.hatch.version]
+path = "src/hugo_writer/_version.py"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/hugo_writer"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

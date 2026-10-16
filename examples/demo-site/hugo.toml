@@ -1,0 +1,14 @@
+# A small, theme-free Hugo site for trying hugo-writer and for its tests:
+#   uv run hugo-writer examples/demo-site
+# Tests copy it to a temporary folder, so this copy is never modified by them.
+baseURL = 'https://demo.example.org/'
+title = 'hugo-writer demo'
+
+# Page bundles published at url: /YYYY/MM/slug.html keep their images in /YYYY/MM/slug/;
+# the embedded image render hook rewrites ![](image.webp) to that real path.
+[markup.goldmark.renderHooks.image]
+  useEmbedded = 'fallback'
+
+# content/posts/2010/01/legacy.html is an HTML content file, which newer Hugo only reads when allowed.
+[security]
+  allowContent = ['! ^text/org$']

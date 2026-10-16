@@ -1,0 +1,2 @@
+# New posts get a Blogger-style URL, like the site this tool was written for.
+url = "/{year}/{month}/{slug}.html"

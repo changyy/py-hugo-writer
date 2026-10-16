@@ -1,0 +1,516 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<!-- Moved to the open post's folder, so relative image links in the editor resolve like on the site. -->
+<base href="/">
+<title>hugo-writer</title>
+<link rel="stylesheet" href="/static/vendor/toastui-editor-3.2.2/toastui-editor.min.css">
+<link rel="stylesheet" href="/static/vendor/toastui-editor-3.2.2/toastui-editor-dark.min.css">
+<style>
+:root {
+  --bg: #f7f7f8; --panel: #ffffff; --text: #1d1d1f; --muted: #6e6e73; --border: #dcdce0;
+  --accent: #0a66c2; --accent-text: #ffffff; --hover: #eef3fb; --active: #dbe7f7;
+  --draft: #a15c00; --draft-bg: #fff4e0; --danger: #b3261e; --code: #f2f2f4;
+  --mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #161618; --panel: #1f1f22; --text: #ececee; --muted: #9a9aa0; --border: #34343a;
+    --accent: #4c9aff; --accent-text: #0b0b0c; --hover: #262a33; --active: #2c3a52;
+    --draft: #f0b35a; --draft-bg: #3a2c14; --danger: #ff8a80; --code: #26262a;
+  }
+}
+* { box-sizing: border-box; }
+[hidden] { display: none !important; }
+html, body { height: 100%; margin: 0; }
+body { display: grid; grid-template-columns: 300px 1fr; background: var(--bg); color: var(--text);
+  font: 14px/1.45 -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang TC", "Noto Sans TC", sans-serif; }
+button, input, select { font: inherit; color: inherit; }
+button { cursor: pointer; border: 1px solid var(--border); background: var(--panel); border-radius: 6px; padding: 5px 10px; }
+button:hover { background: var(--hover); }
+button.primary { background: var(--accent); color: var(--accent-text); border-color: var(--accent); }
+input[type=search], input[type=text], select { border: 1px solid var(--border); background: var(--panel); border-radius: 6px; padding: 5px 8px; }
+a { color: var(--accent); }
+
+aside { display: flex; flex-direction: column; min-height: 0; border-right: 1px solid var(--border); background: var(--panel); }
+.side-head { padding: 12px; display: grid; gap: 8px; border-bottom: 1px solid var(--border); }
+.side-head .row { display: flex; gap: 8px; align-items: center; }
+.side-head .row > :first-child { flex: 1; min-width: 0; }
+.site-name { font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.count { color: var(--muted); font-size: 12px; }
+.side-foot { padding: 8px 12px; border-top: 1px solid var(--border); }
+.side-foot select { width: 100%; }
+#posts { list-style: none; margin: 0; padding: 4px 0; overflow-y: auto; flex: 1; }
+#posts li { padding: 7px 12px; cursor: pointer; border-left: 3px solid transparent; }
+#posts li:hover { background: var(--hover); }
+#posts li.active { background: var(--active); border-left-color: var(--accent); }
+#posts .t { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+#posts .m { display: flex; gap: 6px; color: var(--muted); font-size: 12px; }
+.badge { font-size: 11px; padding: 0 6px; border-radius: 9px; background: var(--draft-bg); color: var(--draft); }
+.badge.ro { background: var(--code); color: var(--muted); }
+
+main { display: flex; flex-direction: column; min-width: 0; min-height: 0; }
+.toolbar { display: flex; align-items: center; gap: 10px; padding: 8px 12px; border-bottom: 1px solid var(--border); background: var(--panel); min-height: 49px; flex-wrap: wrap; }
+.toolbar .title { flex: 1; min-width: 120px; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.toolbar label { display: flex; align-items: center; gap: 4px; white-space: nowrap; }
+#status { color: var(--muted); font-size: 12px; white-space: nowrap; }
+#status.err { color: var(--danger); }
+.views { display: inline-flex; border: 1px solid var(--border); border-radius: 7px; overflow: hidden; }
+.views button { border: 0; border-radius: 0; border-right: 1px solid var(--border); }
+.views button:last-child { border-right: 0; }
+.views button[aria-pressed=true] { background: var(--accent); color: var(--accent-text); }
+.views button:disabled { opacity: .4; cursor: default; background: var(--panel); }
+
+.panes { flex: 1; display: grid; grid-template-columns: 1fr; min-height: 0; }
+.panes.split { grid-template-columns: 1fr 1fr; }
+#editor-pane { display: flex; flex-direction: column; min-width: 0; min-height: 0; background: var(--panel); }
+#front { border-bottom: 1px solid var(--border); }
+#front summary { padding: 6px 12px; cursor: pointer; color: var(--muted); font-size: 12px; user-select: none; }
+#front-text { display: block; width: 100%; min-height: 120px; resize: vertical; border: 0; border-top: 1px solid var(--border); outline: none;
+  padding: 10px 14px; background: var(--code); color: var(--text); font: 13px/1.55 var(--mono); }
+#wysiwyg { flex: 1; min-height: 0; }
+#wysiwyg .toastui-editor-defaultUI { border: 0; border-radius: 0; }
+#source { flex: 1; width: 100%; resize: none; border: 0; outline: none; padding: 16px 20px; background: var(--panel); color: var(--text);
+  font: 13px/1.6 var(--mono); tab-size: 4; }
+#source[readonly] { background: var(--code); }
+#source.dragging { outline: 2px dashed var(--accent); outline-offset: -8px; }
+#preview-pane { min-width: 0; }
+.panes.split #preview-pane { border-left: 1px solid var(--border); }
+#preview { width: 100%; height: 100%; border: 0; background: #fff; }
+.empty { display: grid; place-items: center; height: 100%; color: var(--muted); text-align: center; padding: 24px; }
+.notice { padding: 6px 12px; font-size: 12px; background: var(--code); color: var(--muted); border-bottom: 1px solid var(--border); }
+
+dialog { border: 1px solid var(--border); border-radius: 10px; background: var(--panel); color: var(--text); width: min(440px, 92vw); padding: 20px; }
+dialog::backdrop { background: rgb(0 0 0 / .35); }
+dialog h2 { margin: 0 0 12px; font-size: 16px; }
+dialog label { display: grid; gap: 4px; margin-bottom: 12px; }
+dialog input { width: 100%; }
+dialog .hint { color: var(--muted); font-size: 12px; }
+dialog .err { color: var(--danger); font-size: 13px; min-height: 1.2em; }
+dialog .actions { display: flex; justify-content: flex-end; gap: 8px; }
+</style>
+</head>
+<body>
+<aside>
+  <div class="side-head">
+    <div class="row"><span class="site-name" id="site-name">…</span><button class="primary" id="new-btn" data-i18n="newPost"></button></div>
+    <input type="search" id="search" data-i18n-placeholder="search">
+    <div class="row">
+      <select id="filter">
+        <option value="all" data-i18n="filterAll"></option>
+        <option value="drafts" data-i18n="filterDrafts"></option>
+        <option value="published" data-i18n="filterPublished"></option>
+        <option value="editable" data-i18n="filterEditable"></option>
+      </select>
+      <span class="count" id="count"></span>
+    </div>
+  </div>
+  <ul id="posts"></ul>
+  <div class="side-foot">
+    <select id="lang" aria-label="Language"><option value="en">English</option><option value="zh-TW">繁體中文</option></select>
+  </div>
+</aside>
+
+<main>
+  <div class="toolbar">
+    <span class="title" id="title" data-i18n="noPost"></span>
+    <label hidden id="draft-wrap"><input type="checkbox" id="draft"> <span data-i18n="draft"></span></label>
+    <span id="status"></span>
+    <div class="views" role="group" id="views">
+      <button data-view="wysiwyg" data-i18n="viewWysiwyg" aria-pressed="false"></button>
+      <button data-view="source" data-i18n="viewSource" aria-pressed="false"></button>
+      <button data-view="preview" data-i18n="viewPreview" aria-pressed="false"></button>
+    </div>
+    <label id="split-wrap"><input type="checkbox" id="split"> <span data-i18n="split"></span></label>
+    <a id="open-link" target="_blank" rel="noopener" hidden data-i18n="open"></a>
+  </div>
+  <div class="notice" id="notice" hidden></div>
+  <div class="panes" id="panes">
+    <div id="editor-pane">
+      <div class="empty" id="empty" data-i18n-html="empty"></div>
+      <details id="front" hidden><summary data-i18n="frontMatter"></summary><textarea id="front-text" spellcheck="false"></textarea></details>
+      <div id="wysiwyg" hidden></div>
+      <textarea id="source" hidden spellcheck="false"></textarea>
+    </div>
+    <div id="preview-pane" hidden><div class="empty" id="preview-empty" data-i18n="noPreview"></div><iframe id="preview" hidden></iframe></div>
+  </div>
+</main>
+
+<dialog id="new-dialog">
+  <form method="dialog" id="new-form">
+    <h2 data-i18n="newPost"></h2>
+    <label><span data-i18n="title"></span> <input type="text" id="new-title" required autocomplete="off"></label>
+    <label><span data-i18n="slug"></span> <input type="text" id="new-slug" required pattern="[a-z0-9][a-z0-9\-]*" autocomplete="off">
+      <span class="hint" data-i18n="slugHint"></span></label>
+    <div class="err" id="new-err"></div>
+    <div class="actions"><button value="cancel" formnovalidate data-i18n="cancel"></button><button class="primary" value="ok" data-i18n="createDraft"></button></div>
+  </form>
+</dialog>
+
+<script src="/static/vendor/toastui-editor-3.2.2/toastui-editor-all.min.js"></script>
+<script src="/static/vendor/toastui-editor-3.2.2/zh-tw.min.js"></script>
+<script>
+// -- languages ----------------------------------------------------------------
+// Add a language with a table here and an <option> in #lang.
+const I18N = {
+  en: {
+    newPost: 'New post', search: 'Search titles', filterAll: 'All posts', filterDrafts: 'Drafts',
+    filterPublished: 'Published', filterEditable: 'Markdown only', noPost: 'No post open', draft: 'Draft',
+    viewWysiwyg: 'WYSIWYG', viewSource: 'Source', viewPreview: 'Hugo preview', split: 'Side-by-side preview',
+    open: 'Open ↗', noPreview: 'No preview', frontMatter: 'Front matter',
+    empty: 'Pick a post on the left, or create a new one.<br>Switch between WYSIWYG, the source file and the Hugo preview at the top right.<br>Drop or paste images; they are resized and saved next to the post.',
+    title: 'Title', slug: 'Slug', slugHint: 'Part of the URL: a-z, 0-9 and "-". Filled in from an English title.',
+    cancel: 'Cancel', createDraft: 'Create draft', badgeDraft: 'draft', badgeReadOnly: 'read-only',
+    readOnly: '{path} is not Markdown, so it is shown read-only.',
+    unsaved: 'Unsaved', saving: 'Saving…', saved: 'Saved {time}', saveFailed: 'Save failed: {error}',
+    markedDraft: 'Marked as draft', markedPublished: 'Marked as published',
+    uploading: 'Uploading {name}…', imageSaved: 'Saved {file} ({kb} KB)', imageFailed: 'Image failed: {error}',
+  },
+  'zh-TW': {
+    newPost: '新增文章', search: '搜尋標題', filterAll: '全部文章', filterDrafts: '草稿',
+    filterPublished: '已發布', filterEditable: '只看 Markdown', noPost: '尚未開啟文章', draft: '草稿',
+    viewWysiwyg: '所見即所得', viewSource: '原始檔', viewPreview: 'Hugo 預覽', split: '並排預覽',
+    open: '開新分頁 ↗', noPreview: '沒有預覽', frontMatter: '文章設定（front matter）',
+    empty: '從左側挑一篇文章，或新增一篇。<br>右上角可切換：所見即所得、原始檔、Hugo 預覽。<br>拖拉或貼上圖片，會自動縮小並存在文章旁邊。',
+    title: '標題', slug: '網址代稱', slugHint: '會成為網址的一部分：a-z、0-9 和「-」。英文標題會自動帶入。',
+    cancel: '取消', createDraft: '建立草稿', badgeDraft: '草稿', badgeReadOnly: '唯讀',
+    readOnly: '{path} 不是 Markdown，僅供檢視。',
+    unsaved: '尚未儲存', saving: '儲存中…', saved: '已儲存 {time}', saveFailed: '儲存失敗：{error}',
+    markedDraft: '已設為草稿', markedPublished: '已設為發布',
+    uploading: '上傳 {name} 中…', imageSaved: '已儲存 {file}（{kb} KB）', imageFailed: '圖片失敗：{error}',
+  },
+};
+
+function load(key) { try { return localStorage.getItem('hugo-writer:' + key); } catch { return null; } }
+function store(key, value) { try { localStorage.setItem('hugo-writer:' + key, value); } catch {} }
+
+function pickLang() {
+  const wanted = new URLSearchParams(location.search).get('lang') || load('lang');
+  if (wanted && I18N[wanted]) return wanted;
+  return (navigator.languages || [navigator.language]).some(l => l.toLowerCase().startsWith('zh')) ? 'zh-TW' : 'en';
+}
+const LANG = pickLang();
+const t = (key, vars = {}) => (I18N[LANG][key] ?? I18N.en[key] ?? key).replace(/\{(\w+)\}/g, (_, k) => vars[k] ?? '');
+
+document.documentElement.lang = LANG;
+document.querySelectorAll('[data-i18n]').forEach(el => { el.textContent = t(el.dataset.i18n); });
+document.querySelectorAll('[data-i18n-html]').forEach(el => { el.innerHTML = t(el.dataset.i18nHtml); });
+document.querySelectorAll('[data-i18n-placeholder]').forEach(el => { el.placeholder = t(el.dataset.i18nPlaceholder); });
+
+// -- state and helpers --------------------------------------------------------
+
+const $ = id => document.getElementById(id);
+const state = {
+  info: null, posts: [], current: null,
+  view: new URLSearchParams(location.search).get('view') || load('view') || 'wysiwyg',  // wysiwyg | source | preview
+  split: load('split') === '1',
+  dirty: false, timer: null, loading: false, savedText: null,
+};
+const FRONT = /^(---|\+\+\+)[ \t]*\r?\n[\s\S]*?\r?\n\1[ \t]*(\r?\n|$)/;
+
+async function api(method, url, body, raw) {
+  const opts = { method, headers: {} };
+  if (method !== 'GET') opts.headers['X-Hugo-Writer'] = '1';
+  if (body !== undefined) {
+    opts.body = raw ? body : JSON.stringify(body);
+    if (!raw) opts.headers['Content-Type'] = 'application/json';
+  }
+  const res = await fetch(url, opts);
+  const data = await res.json().catch(() => ({ error: res.statusText }));
+  if (!res.ok) throw new Error(data.error || res.statusText);
+  return data;
+}
+
+function status(text, err) { $('status').textContent = text; $('status').classList.toggle('err', !!err); }
+const time = () => new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+
+// Front matter stays out of the WYSIWYG editor, which would turn "---" into a rule.
+function split(text) {
+  const m = text.match(FRONT);
+  return m ? [m[0].trim(), text.slice(m[0].length).replace(/^\r?\n/, '')] : ['', text];
+}
+function join(front, body) {
+  front = front.trim();
+  return front ? `${front}\n\n${body.replace(/^\n+/, '')}` : body;
+}
+
+// -- the WYSIWYG editor -------------------------------------------------------
+
+const editor = new toastui.Editor({
+  el: $('wysiwyg'),
+  height: '100%',
+  initialEditType: 'wysiwyg',
+  hideModeSwitch: true,            // the Source view is the Markdown view
+  usageStatistics: false,          // the library reports to Google Analytics unless told not to
+  theme: matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light',
+  language: LANG === 'zh-TW' ? 'zh-TW' : 'en-US',
+  hooks: {
+    addImageBlobHook: (blob, done) => { uploadImage(blob).then(r => r && done(r.url, '')); return false; },
+  },
+});
+editor.on('change', () => { if (!state.loading) changed(); });
+
+function setEditorBody(body) {
+  state.loading = true;
+  editor.setMarkdown(body, false);
+  setTimeout(() => { state.loading = false; }, 0);
+}
+
+// The post as it currently stands in whichever editing view is active.
+function currentText() {
+  return state.view === 'source' ? $('source').value : join($('front-text').value, editor.getMarkdown());
+}
+
+// -- views --------------------------------------------------------------------
+
+function setView(view) {
+  const post = state.current;
+  if (post && !post.editable && view === 'wysiwyg') view = 'source';
+  if (post?.editable && view !== state.view) {
+    // Carry the text across: Source holds the whole file, WYSIWYG holds front matter + body.
+    if (view === 'source') $('source').value = currentText();
+    else if (state.view === 'source') {
+      const [front, body] = split($('source').value);
+      $('front-text').value = front;
+      setEditorBody(body);
+    }
+  }
+  state.view = view;
+  if (post?.editable) store('view', view);
+  layout();
+}
+
+function layout() {
+  const post = state.current, view = state.view;
+  const hasPreview = !!(state.info?.preview && post?.url);
+  document.querySelectorAll('#views button').forEach(b => {
+    b.setAttribute('aria-pressed', String(!!post && b.dataset.view === view));
+    b.disabled = !post || (b.dataset.view === 'wysiwyg' && !post.editable) || (b.dataset.view === 'preview' && !hasPreview);
+  });
+  const showPreview = !!post && hasPreview && (view === 'preview' || state.split);
+  $('editor-pane').hidden = !!post && view === 'preview';
+  $('preview-pane').hidden = !showPreview;
+  $('panes').classList.toggle('split', showPreview && view !== 'preview');
+  $('split-wrap').hidden = !hasPreview || view === 'preview';
+  $('empty').hidden = !!post;
+  $('front').hidden = $('wysiwyg').hidden = !post || !post.editable || view !== 'wysiwyg';
+  $('source').hidden = !post || view !== 'source';
+}
+
+// -- post list ----------------------------------------------------------------
+
+async function loadPosts() {
+  state.posts = (await api('GET', '/api/posts')).posts;
+  renderList();
+}
+
+function renderList() {
+  const q = $('search').value.trim().toLowerCase();
+  const f = $('filter').value;
+  const shown = state.posts.filter(p =>
+    (!q || p.title.toLowerCase().includes(q) || p.path.toLowerCase().includes(q)) &&
+    (f === 'all' || (f === 'drafts' && p.draft) || (f === 'published' && !p.draft) || (f === 'editable' && p.editable)));
+  $('count').textContent = `${shown.length} / ${state.posts.length}`;
+  $('posts').replaceChildren(...shown.slice(0, 500).map(p => {
+    const li = document.createElement('li');
+    li.className = state.current?.path === p.path ? 'active' : '';
+    const name = document.createElement('span'); name.className = 't'; name.textContent = p.title || p.path;
+    const meta = document.createElement('span'); meta.className = 'm';
+    meta.append(p.date.slice(0, 10));
+    if (p.draft) { const b = document.createElement('span'); b.className = 'badge'; b.textContent = t('badgeDraft'); meta.append(b); }
+    if (!p.editable) { const b = document.createElement('span'); b.className = 'badge ro'; b.textContent = t('badgeReadOnly'); meta.append(b); }
+    li.append(name, meta);
+    li.onclick = () => openPost(p.path);
+    return li;
+  }));
+}
+
+// -- editing ------------------------------------------------------------------
+
+// Where Hugo publishes a page bundle's images: /a/b/ for /a/b/, and /a/b/ for /a/b.html too.
+function folderOf(url) {
+  if (!url) return '/';
+  return url.endsWith('/') ? url : url.replace(/\.[^/.]*$/, '') + '/';
+}
+
+async function openPost(path) {
+  if (state.dirty) await save();
+  const post = await api('GET', '/api/post?path=' + encodeURIComponent(path));
+  const meta = state.posts.find(p => p.path === path) || { title: path, draft: false, url: '' };
+  state.current = { ...meta, ...post };
+  document.querySelector('base').href = folderOf(meta.url);
+  $('title').textContent = meta.title || path;
+  $('draft-wrap').hidden = !post.editable;
+  $('draft').checked = meta.draft;
+  $('notice').hidden = post.editable;
+  $('notice').textContent = post.editable ? '' : t('readOnly', { path });
+  $('source').readOnly = !post.editable;
+  $('source').value = post.text;
+  $('source').scrollTop = 0;
+  if (post.editable) {
+    const [front, body] = split(post.text);
+    $('front-text').value = front;
+    setEditorBody(body);
+  } else if (state.view === 'wysiwyg') {
+    state.view = 'source';
+  }
+  // What the active view holds right after loading (WYSIWYG may normalize the Markdown):
+  // saving is skipped while the text still matches, so opening a post never rewrites it.
+  state.savedText = post.editable ? currentText() : null;
+  state.dirty = false; status('');
+  showPreview(meta.url);
+  layout();
+  renderList();
+  if (post.editable && state.view === 'wysiwyg') editor.moveCursorToStart(true);
+}
+
+function showPreview(url) {
+  const base = state.info?.preview;
+  $('open-link').hidden = !(base && url);
+  if (!base || !url) { $('preview').hidden = true; $('preview-empty').hidden = false; return; }
+  $('preview').src = base + url; $('preview').hidden = false; $('preview-empty').hidden = true;
+  $('open-link').href = base + url;
+}
+
+function changed() {
+  if (!state.current?.editable) return;
+  state.dirty = true; status(t('unsaved'));
+  clearTimeout(state.timer);
+  state.timer = setTimeout(save, 1000);
+}
+
+async function save() {
+  clearTimeout(state.timer);
+  if (!state.current?.editable || !state.dirty) return;
+  const path = state.current.path, text = currentText();
+  state.dirty = false;
+  if (text === state.savedText) { status(''); return; }
+  try {
+    status(t('saving'));
+    await api('PUT', '/api/post', { path, text });
+    state.savedText = text;
+    status(t('saved', { time: time() }));
+  } catch (e) { state.dirty = true; status(t('saveFailed', { error: e.message }), true); }
+}
+
+async function setDraft(draft) {
+  if (!state.current) return;
+  await save();
+  try {
+    const { text } = await api('POST', '/api/draft', { path: state.current.path, draft });
+    $('front-text').value = split(text)[0];
+    if (state.view === 'source') {
+      const ta = $('source'), pos = ta.selectionStart;
+      ta.value = text; ta.selectionStart = ta.selectionEnd = Math.min(pos, text.length);
+    }
+    state.savedText = currentText();
+    const p = state.posts.find(p => p.path === state.current.path); if (p) p.draft = draft;
+    state.current.draft = draft; renderList(); status(t(draft ? 'markedDraft' : 'markedPublished'));
+  } catch (e) { $('draft').checked = !draft; status(e.message, true); }
+}
+
+// -- images -------------------------------------------------------------------
+
+async function uploadImage(file) {
+  if (!state.current?.editable) return null;
+  const name = file.name && file.name !== 'image.png' ? file.name : `pasted-${Date.now()}.png`;
+  try {
+    status(t('uploading', { name }));
+    const res = await api('POST', `/api/image?post=${encodeURIComponent(state.current.path)}&name=${encodeURIComponent(name)}`, file, true);
+    status(t('imageSaved', { file: res.file, kb: Math.round(res.bytes / 1024) }));
+    return res;
+  } catch (e) { status(t('imageFailed', { error: e.message }), true); return null; }
+}
+
+// The source view is a plain textarea: insert ![](…) at the cursor for dropped or pasted images.
+async function sourceImages(files) {
+  const ta = $('source');
+  for (const file of files) {
+    const res = await uploadImage(file);
+    if (!res) continue;
+    ta.setRangeText(`![](${res.url})\n`, ta.selectionStart, ta.selectionEnd, 'end');
+    changed();
+  }
+}
+const imageFiles = list => [...list].filter(f => f && f.type.startsWith('image/'));
+
+// -- new post -----------------------------------------------------------------
+
+function slugify(s) {
+  return s.normalize('NFKD').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 80);
+}
+
+$('new-btn').onclick = () => { $('new-form').reset(); $('new-err').textContent = ''; $('new-slug').dataset.touched = ''; $('new-dialog').showModal(); };
+$('new-title').oninput = () => { if (!$('new-slug').dataset.touched) $('new-slug').value = slugify($('new-title').value); };
+$('new-slug').oninput = () => { $('new-slug').dataset.touched = '1'; };
+$('new-form').onsubmit = async e => {
+  if (e.submitter?.value !== 'ok') return;
+  e.preventDefault();
+  try {
+    const { path } = await api('POST', '/api/post', { title: $('new-title').value, slug: $('new-slug').value });
+    $('new-dialog').close();
+    await loadPosts();
+    await openPost(path);
+    if (state.view === 'preview') setView('wysiwyg');
+    (state.view === 'source' ? $('source') : editor).focus();
+  } catch (err) { $('new-err').textContent = err.message; }
+};
+
+// -- wiring -------------------------------------------------------------------
+
+const src = $('source');
+src.addEventListener('input', changed);
+src.addEventListener('keydown', e => {
+  if (e.key === 'Tab' && !src.readOnly) { e.preventDefault(); src.setRangeText('    ', src.selectionStart, src.selectionEnd, 'end'); changed(); }
+});
+src.addEventListener('paste', e => {
+  const files = imageFiles([...e.clipboardData.items].filter(i => i.kind === 'file').map(i => i.getAsFile()));
+  if (files.length && !src.readOnly) { e.preventDefault(); sourceImages(files); }
+});
+src.addEventListener('dragover', e => { if (!src.readOnly) { e.preventDefault(); src.classList.add('dragging'); } });
+src.addEventListener('dragleave', () => src.classList.remove('dragging'));
+src.addEventListener('drop', e => {
+  src.classList.remove('dragging');
+  const files = imageFiles(e.dataTransfer.files);
+  if (!files.length || src.readOnly) return;
+  e.preventDefault();
+  sourceImages(files);
+});
+$('front-text').addEventListener('input', changed);
+document.addEventListener('keydown', e => {
+  if ((e.metaKey || e.ctrlKey) && e.key === 's') { e.preventDefault(); save(); }
+});
+window.addEventListener('beforeunload', e => { if (state.dirty) { save(); e.preventDefault(); } });
+$('draft').onchange = e => setDraft(e.target.checked);
+$('search').oninput = renderList;
+$('filter').onchange = renderList;
+document.querySelectorAll('#views button').forEach(b => { b.onclick = () => setView(b.dataset.view); });
+$('split').checked = state.split;
+$('split').onchange = e => { state.split = e.target.checked; store('split', state.split ? '1' : '0'); layout(); };
+$('lang').value = LANG;
+$('lang').onchange = async e => {
+  // The editor's own menus are localized when it is created, so switch by reloading.
+  await save();
+  store('lang', e.target.value);
+  const url = new URL(location.href); url.searchParams.delete('lang');
+  location.replace(url);
+};
+
+layout();
+(async () => {
+  try {
+    state.info = await api('GET', '/api/info');
+    $('site-name').textContent = state.info.name;
+    $('site-name').title = state.info.root;
+    document.title = `${state.info.name} · hugo-writer`;
+    await loadPosts();
+    // ?open=content/posts/…/index.md opens a post directly (handy for bookmarks).
+    const open = new URLSearchParams(location.search).get('open');
+    if (open) await openPost(open);
+  } catch (e) { status(e.message, true); }
+})();
+</script>
+</body>
+</html>
