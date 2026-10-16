@@ -9,7 +9,7 @@ from importlib import resources
 from urllib.parse import parse_qs, urlsplit
 
 from . import images
-from .site import SiteError, atomic_write
+from .site import SiteError, atomic_write, has_raw_html
 
 # Every request that changes files must carry this header. A web page on another
 # origin can't add a custom header without a CORS preflight, which we never grant,
@@ -146,7 +146,9 @@ class Handler(BaseHTTPRequestHandler):
     def get_post(self):
         rel = self._query().get('path', '')
         site = self.server.site
-        self._json({'path': rel, 'text': site.read(rel), 'editable': site.resolve(rel).suffix.lower() in ('.md', '.markdown')})
+        text = site.read(rel)
+        editable = site.resolve(rel).suffix.lower() in ('.md', '.markdown')
+        self._json({'path': rel, 'text': text, 'editable': editable, 'has_html': editable and has_raw_html(text)})
 
     def save_post(self):
         data = json.loads(self._body())

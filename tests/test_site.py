@@ -3,7 +3,7 @@ from datetime import datetime, timezone
 
 import pytest
 
-from hugo_writer.site import Settings, Site, SiteError, set_draft
+from hugo_writer.site import Settings, Site, SiteError, front_matter_end, has_raw_html, set_draft
 
 from .conftest import BUNDLE, DRAFT, HUGO, LEGACY, needs_hugo
 
@@ -111,3 +111,24 @@ def test_posts_lists_every_page_with_hugos_metadata(site):
     assert new['draft'] is True and new['url'] == '/2026/10/brand-new.html'
     listed = [p['date'] for p in site.posts()]
     assert listed == sorted(listed, reverse=True)
+
+
+@pytest.mark.parametrize('text, expected', [
+    ('---\ntitle: x\n---\n\n<iframe src="https://example.org"></iframe>\n', True),
+    ('Intro\n\n<table><tr><td>a</td></tr></table>\n', True),
+    ('Inline <b>bold</b> and <br> are fine for WYSIWYG.\n', False),
+    ('```html\n<iframe src="x"></iframe>\n```\n', False),
+    ('---\ntitle: "<div>"\n---\nplain\n', False),
+])
+def test_has_raw_html(text, expected):
+    assert has_raw_html(text) is expected
+
+
+@pytest.mark.parametrize('text, end', [
+    ('---\ntitle: x\n---\nbody', len('---\ntitle: x\n---')),
+    ('+++\ntitle = "x"\n+++\nbody', len('+++\ntitle = "x"\n+++')),
+    ('{\n  "title": "a } b \\" {",\n  "c": {"d": 1}\n}\n\nbody', len('{\n  "title": "a } b \\" {",\n  "c": {"d": 1}\n}')),
+    ('no front matter', 0),
+])
+def test_front_matter_end(text, end):
+    assert front_matter_end(text) == end

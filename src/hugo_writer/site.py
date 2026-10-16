@@ -18,6 +18,8 @@ from urllib.parse import urlsplit
 CONFIG_FILES = tuple(f'{base}.{ext}' for base in ('hugo', 'config') for ext in ('toml', 'yaml', 'yml', 'json'))
 EDITABLE_SUFFIXES = {'.md', '.markdown'}
 SLUG = re.compile(r'^[a-z0-9][a-z0-9-]*$')
+# Raw HTML blocks the WYSIWYG editor would drop or mangle (embeds, tables, scripts, …).
+RAW_HTML = re.compile(r'^[ \t]*<(iframe|object|embed|video|audio|script|style|table|div|form)\b', re.M | re.I)
 FRONT_MATTER = re.compile(r'\A(---|\+\+\+)[ \t]*\n(.*?)\n?^\1[ \t]*$', re.S | re.M)
 
 
@@ -175,6 +177,35 @@ def set_draft(text: str, draft: bool) -> str:
             return existing.sub(f'"draft": {value}', text, count=1)
         return re.sub(r'\{', '{\n  "draft": ' + value + ',', text, count=1)
     return f'---\ndraft: {value}\n---\n' + text
+
+
+def front_matter_end(text: str) -> int:
+    """Where the front matter (YAML ---, TOML +++ or a JSON object) ends; 0 if there is none."""
+    if m := FRONT_MATTER.match(text):
+        return m.end()
+    if not text.startswith('{'):
+        return 0
+    depth, in_string, escaped = 0, False, False
+    for i, ch in enumerate(text):
+        if in_string:
+            escaped, in_string = (False, True) if escaped else (ch == '\\', ch != '"')
+        elif ch == '"':
+            in_string = True
+        elif ch == '{':
+            depth += 1
+        elif ch == '}':
+            depth -= 1
+            if depth == 0:
+                return i + 1
+    return 0
+
+
+def has_raw_html(text: str) -> bool:
+    """Whether a Markdown post carries HTML blocks that only the source view keeps intact."""
+    body = text[front_matter_end(text):]
+    # Ignore fenced code: HTML shown as an example is not HTML on the page.
+    body = re.sub(r'^(```|~~~).*?^\1', '', body, flags=re.M | re.S)
+    return bool(RAW_HTML.search(body))
 
 
 def atomic_write(path: Path, data: bytes) -> None:

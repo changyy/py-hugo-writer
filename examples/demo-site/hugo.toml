@@ -12,3 +12,7 @@ title = 'hugo-writer demo'
 # content/posts/2010/01/legacy.html is an HTML content file, which newer Hugo only reads when allowed.
 [security]
   allowContent = ['! ^text/org$']
+
+# with-embed.md keeps an <iframe> in Markdown
+[markup.goldmark.renderer]
+  unsafe = true

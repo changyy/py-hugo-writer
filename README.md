@@ -34,7 +34,9 @@ to your content folder. No server to host, no account, no database — just your
 | 8 | English and Traditional Chinese UI | follows the browser language; switch at the bottom left |
 
 Only Markdown posts are editable. Other content files (HTML, Org, …) are listed and
-shown read-only, so a migrated archive can sit next to new posts safely.
+shown read-only, so a migrated archive can sit next to new posts safely. Markdown posts
+that carry HTML blocks (embeds, tables, scripts) open in the source view, with a note,
+because a WYSIWYG editor can't keep that HTML intact.
 
 ---
 
@@ -80,7 +82,8 @@ interfere with a `hugo server` you already run), then opens the editor at
 ### 2. Write
 
 - **New post** asks for a title and a slug and creates a draft page bundle.
-- **WYSIWYG** edits the formatted text; the front matter sits in a collapsible box above it.
+- **WYSIWYG** edits the formatted text; the front matter (YAML, TOML or JSON) sits in a
+  collapsible box above it.
 - **Source** shows the whole file, front matter included.
 - **Hugo preview** shows the page exactly as your theme renders it. Tick
   *Side-by-side preview* to keep it next to the WYSIWYG or source view.

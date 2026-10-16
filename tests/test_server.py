@@ -98,3 +98,10 @@ def test_preview_renders_posts_and_the_editor_proxies_their_images(site):
         app.shutdown()
         app.server_close()
         preview.stop()
+
+
+def test_posts_with_html_blocks_are_flagged(app):
+    _, _, data = request(app, 'GET', '/api/post?path=content/posts/2024/07/with-embed.md')
+    assert json.loads(data)['has_html'] is True
+    _, _, data = request(app, 'GET', f'/api/post?path={BUNDLE}')
+    assert json.loads(data)['has_html'] is False

@@ -164,6 +164,7 @@ const I18N = {
     title: 'Title', slug: 'Slug', slugHint: 'Part of the URL: a-z, 0-9 and "-". Filled in from an English title.',
     cancel: 'Cancel', createDraft: 'Create draft', badgeDraft: 'draft', badgeReadOnly: 'read-only',
     readOnly: '{path} is not Markdown, so it is shown read-only.',
+    hasHtml: 'This post contains HTML (embeds, tables, …). WYSIWYG may drop it, so it opens in the source view.',
     unsaved: 'Unsaved', saving: 'Saving…', saved: 'Saved {time}', saveFailed: 'Save failed: {error}',
     markedDraft: 'Marked as draft', markedPublished: 'Marked as published',
     uploading: 'Uploading {name}…', imageSaved: 'Saved {file} ({kb} KB)', imageFailed: 'Image failed: {error}',
@@ -177,6 +178,7 @@ const I18N = {
     title: '標題', slug: '網址代稱', slugHint: '會成為網址的一部分：a-z、0-9 和「-」。英文標題會自動帶入。',
     cancel: '取消', createDraft: '建立草稿', badgeDraft: '草稿', badgeReadOnly: '唯讀',
     readOnly: '{path} 不是 Markdown，僅供檢視。',
+    hasHtml: '這篇文章含有 HTML（嵌入內容、表格等），所見即所得可能會把它們移除，因此以原始檔檢視開啟。',
     unsaved: '尚未儲存', saving: '儲存中…', saved: '已儲存 {time}', saveFailed: '儲存失敗：{error}',
     markedDraft: '已設為草稿', markedPublished: '已設為發布',
     uploading: '上傳 {name} 中…', imageSaved: '已儲存 {file}（{kb} KB）', imageFailed: '圖片失敗：{error}',
@@ -226,10 +228,27 @@ async function api(method, url, body, raw) {
 function status(text, err) { $('status').textContent = text; $('status').classList.toggle('err', !!err); }
 const time = () => new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
 
-// Front matter stays out of the WYSIWYG editor, which would turn "---" into a rule.
-function split(text) {
+// Where the front matter (YAML ---, TOML +++ or a JSON object) ends; 0 if there is none.
+function frontEnd(text) {
   const m = text.match(FRONT);
-  return m ? [m[0].trim(), text.slice(m[0].length).replace(/^\r?\n/, '')] : ['', text];
+  if (m) return m[0].length;
+  if (!text.startsWith('{')) return 0;
+  let depth = 0, inString = false, escaped = false;
+  for (let i = 0; i < text.length; i++) {
+    const ch = text[i];
+    if (inString) { if (escaped) escaped = false; else if (ch === '\\') escaped = true; else if (ch === '"') inString = false; }
+    else if (ch === '"') inString = true;
+    else if (ch === '{') depth++;
+    else if (ch === '}' && --depth === 0) return i + 1;
+  }
+  return 0;
+}
+
+// Front matter stays out of the WYSIWYG editor, which would turn "---" into a rule
+// (and mangle a JSON object).
+function split(text) {
+  const end = frontEnd(text);
+  return [text.slice(0, end).trim(), text.slice(end).replace(/^\r?\n+/, '')];
 }
 function join(front, body) {
   front = front.trim();
@@ -344,8 +363,9 @@ async function openPost(path) {
   $('title').textContent = meta.title || path;
   $('draft-wrap').hidden = !post.editable;
   $('draft').checked = meta.draft;
-  $('notice').hidden = post.editable;
-  $('notice').textContent = post.editable ? '' : t('readOnly', { path });
+  const notice = !post.editable ? t('readOnly', { path }) : post.has_html ? t('hasHtml') : '';
+  $('notice').hidden = !notice;
+  $('notice').textContent = notice;
   $('source').readOnly = !post.editable;
   $('source').value = post.text;
   $('source').scrollTop = 0;
@@ -353,9 +373,10 @@ async function openPost(path) {
     const [front, body] = split(post.text);
     $('front-text').value = front;
     setEditorBody(body);
-  } else if (state.view === 'wysiwyg') {
-    state.view = 'source';
   }
+  // The view you last picked, except WYSIWYG for posts it can't hold faithfully.
+  const preferred = load('view') || state.view;
+  state.view = (!post.editable || post.has_html) && preferred === 'wysiwyg' ? 'source' : preferred;
   // What the active view holds right after loading (WYSIWYG may normalize the Markdown):
   // saving is skipped while the text still matches, so opening a post never rewrites it.
   state.savedText = post.editable ? currentText() : null;
