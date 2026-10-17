@@ -34,6 +34,7 @@ to your content folder. No server to host, no account, no database — just your
 | 6 | Drop or paste images (screenshots too) | scaled to 1024 px (or 512 / 256 / 128), re-encoded as WebP, EXIF / GPS removed (and reported), named after the post, saved next to it |
 | 7 | Move and align images in the WYSIWYG view | drag an image elsewhere; click it for Left / Center / Right |
 | 8 | Image panel per post, and an image library for the whole site | thumbnails, which posts use each image, rename to `{slug}-NN`, delete what nothing uses |
+| 8a | Links that open in a new tab, with rel (nofollow, sponsored, ugc, …) | click a link; written as HTML `<a>` only when needed |
 | 8b | Settings in the UI | image naming, maximum width, format, quality, metadata — saved to `.hugo-writer.toml` |
 | 9 | Autosave, and the open post stays in the address | a second after you stop typing, or ⌘S / Ctrl+S; reloading comes back to the same post |
 | 10 | English and Traditional Chinese UI | follows the browser language; switch at the bottom left |
@@ -142,6 +143,15 @@ img[src*="#"][src$="w512"] { width: 512px; }
 img[src*="#"][src$="w256"] { width: 256px; }
 img[src*="#"][src$="w128"] { width: 128px; }
 ```
+
+#### Links: new tab and rel
+
+Click a link in the WYSIWYG view to set **Open in a new tab** and `rel` (nofollow,
+sponsored, ugc, noopener, noreferrer). Markdown links can't hold these, so a link with any
+of them is written as HTML, `<a href="…" target="_blank" rel="nofollow">…</a>`, and goes
+back to `[text](url)` when they are all cleared. The site must let raw HTML through
+Markdown (`[markup.goldmark.renderer] unsafe = true`). hugo-writer keeps these attributes
+when you edit around such links (TOAST UI on its own drops them).
 
 #### The image library
 

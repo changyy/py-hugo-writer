@@ -1,5 +1,12 @@
 # Changelog
 
+## 1.20261017.1103544
+
+- Click a link for "Open in a new tab" and rel (nofollow, sponsored, ugc, noopener, noreferrer); such
+  links are written as HTML `<a>`, and go back to Markdown when cleared.
+- Fix: editing a post in the WYSIWYG view dropped `target` and `rel` from its HTML `<a>` links
+  (TOAST UI neither reads nor writes them); they are now kept.
+
 ## 1.20261017.1102721
 
 - Click an image for a display width too: Full size / Large 512 / Medium 256 / Small 128, kept with the

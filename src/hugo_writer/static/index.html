@@ -126,6 +126,11 @@ main { display: flex; flex-direction: column; min-width: 0; min-height: 0; }
   border-radius: 7px; background: var(--panel); box-shadow: 0 2px 8px rgb(0 0 0 / .15); }
 #img-tools button { padding: 3px 8px; font-size: 12px; }
 #img-tools .sep { width: 1px; margin: 2px 4px; background: var(--border); }
+#link-tools { position: fixed; z-index: 40; display: flex; flex-wrap: wrap; align-items: center; gap: 4px 10px; max-width: 640px;
+  padding: 6px 10px; border: 1px solid var(--border); border-radius: 7px; background: var(--panel); box-shadow: 0 2px 8px rgb(0 0 0 / .15); font-size: 12px; }
+#link-tools label { display: inline-flex; align-items: center; gap: 3px; white-space: nowrap; }
+#link-tools .url { flex-basis: 100%; color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+#link-tools .sep { width: 1px; align-self: stretch; background: var(--border); }
 #img-tools button[aria-pressed=true] { background: var(--accent); color: var(--accent-text); border-color: var(--accent); }
 #source { flex: 1; width: 100%; resize: none; border: 0; outline: none; padding: 16px 20px; background: var(--panel); color: var(--text);
   font: 13px/1.6 var(--mono); tab-size: 4; }
@@ -238,6 +243,18 @@ dialog .actions { display: flex; justify-content: flex-end; gap: 8px; }
   <button data-size="w128" data-i18n="show128"></button>
 </div>
 
+<div id="link-tools" hidden role="toolbar">
+  <span class="url" id="link-url"></span>
+  <label><input type="checkbox" data-target="_blank"> <span data-i18n="linkNewTab"></span></label>
+  <span class="sep"></span>
+  <span>rel:</span>
+  <label><input type="checkbox" data-rel="nofollow"> nofollow</label>
+  <label><input type="checkbox" data-rel="sponsored"> sponsored</label>
+  <label><input type="checkbox" data-rel="ugc"> ugc</label>
+  <label><input type="checkbox" data-rel="noopener"> noopener</label>
+  <label><input type="checkbox" data-rel="noreferrer"> noreferrer</label>
+</div>
+
 <dialog id="settings-dialog">
   <form method="dialog" id="settings-form">
     <h2 data-i18n="settings"></h2>
@@ -301,6 +318,7 @@ const I18N = {
     confirmDelete: 'Delete {name}?', confirmDeleteUsed: '{name} is used in this post and would show as a broken image. Delete anyway?',
     confirmDeleteUnused: 'Delete {n} unused image(s)?\n\n{names}', deleted: 'Deleted {n} image(s)',
     alignLeft: 'Left', alignCenter: 'Center', alignRight: 'Right', alignDefault: 'Default',
+    linkNewTab: 'Open in a new tab',
     showFull: 'Full size', show512: 'Large 512', show256: 'Medium 256', show128: 'Small 128',
     imageSize: 'Images:', sizeOriginal: 'Original (max {max})', sizeLarge: 'Large 512', sizeMedium: 'Medium 256', sizeSmall: 'Small 128',
     open: 'Open ↗', noPreview: 'No preview', frontMatter: 'Front matter',
@@ -338,6 +356,7 @@ const I18N = {
     confirmDelete: '刪除 {name}？', confirmDeleteUsed: '{name} 正在這篇文章裡使用，刪除後會變成破圖。確定要刪除嗎？',
     confirmDeleteUnused: '刪除 {n} 張未使用的圖片？\n\n{names}', deleted: '已刪除 {n} 張圖片',
     alignLeft: '靠左', alignCenter: '置中', alignRight: '靠右', alignDefault: '預設',
+    linkNewTab: '開新分頁',
     showFull: '原始', show512: '大 512', show256: '中 256', show128: '小 128',
     imageSize: '圖片：', sizeOriginal: '原始（最寬 {max}）', sizeLarge: '大 512', sizeMedium: '中 256', sizeSmall: '小 128',
     open: '開新分頁 ↗', noPreview: '沒有預覽', frontMatter: '文章設定（front matter）',
@@ -426,8 +445,32 @@ function join(front, body) {
 
 // -- the WYSIWYG editor -------------------------------------------------------
 
+// -- HTML links: <a href target rel> -------------------------------------------
+// Markdown links have nowhere to put target / rel, so such links are written as HTML <a>.
+// TOAST UI 3.2.2 keeps an <a> as a link with rawHTML "a" but drops its other attributes, both
+// when loading (they never reach the link's htmlAttrs) and when saving (only href and title are
+// written). Saving is fixed here; loading in restoreLinkAttrs().
+const LINK_ATTRS = ['target', 'rel'];
+function escapeAttr(v) { return String(v).replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;'); }
+function linkAttrsPlugin() {
+  return {
+    toMarkdownRenderers: {
+      link(nodeInfo, context) {
+        const result = context.origin();
+        const { rawHTML, htmlAttrs } = nodeInfo.node.attrs;
+        if (context.entering && rawHTML && htmlAttrs && result && result.rawHTML) {
+          const extra = LINK_ATTRS.filter(k => htmlAttrs[k]).map(k => ` ${k}="${escapeAttr(htmlAttrs[k])}"`).join('');
+          result.rawHTML = result.rawHTML.replace(/>$/, extra + '>');
+        }
+        return result;
+      },
+    },
+  };
+}
+
 const editor = new toastui.Editor({
   el: $('wysiwyg'),
+  plugins: [linkAttrsPlugin],
   height: '100%',
   initialEditType: 'wysiwyg',
   hideModeSwitch: true,            // the Source view is the Markdown view
@@ -579,6 +622,62 @@ $('wysiwyg').addEventListener('drop', e => {
 pm.dom.addEventListener('click', e => { e.target.tagName === 'IMG' ? showImageTools(e.target) : hideImageTools(); });
 pm.dom.addEventListener('dragstart', hideImageTools);
 $('wysiwyg').addEventListener('scroll', hideImageTools, true);
+// -- link tools: target and rel ----------------------------------------------------
+// Clicking a link shows them; any target / rel turns it into an HTML <a> (Markdown can't hold
+// them), clearing all turns it back into a Markdown link.
+let linkFor = null;   // { from, to, mark } of the link the tools belong to
+
+function linkRangeAt(pos) {
+  let found = null;
+  const runs = [];
+  pm.state.doc.descendants((node, at) => {
+    if (!node.isText) return;
+    const mark = node.marks.find(m => m.type.name === 'link');
+    if (!mark) return;
+    const last = runs[runs.length - 1];
+    if (last && last.to === at && last.mark.eq(mark)) last.to = at + node.nodeSize;
+    else runs.push({ from: at, to: at + node.nodeSize, mark });
+  });
+  for (const r of runs) if (r.from <= pos && pos <= r.to) found = r;
+  return found;
+}
+
+function showLinkTools(a) {
+  const range = linkRangeAt(pm.posAtDOM(a.firstChild || a, 0));
+  if (!range) return hideLinkTools();
+  linkFor = range;
+  const attrs = range.mark.attrs.htmlAttrs || {}, rel = (attrs.rel || '').split(/\s+/);
+  $('link-url').textContent = range.mark.attrs.linkUrl;
+  document.querySelectorAll('#link-tools input[data-target]').forEach(i => { i.checked = attrs.target === i.dataset.target; });
+  document.querySelectorAll('#link-tools input[data-rel]').forEach(i => { i.checked = rel.includes(i.dataset.rel); });
+  const box = a.getBoundingClientRect(), tools = $('link-tools');
+  tools.hidden = false;
+  tools.style.top = Math.min(innerHeight - tools.offsetHeight - 8, box.bottom + 6) + 'px';
+  tools.style.left = Math.max(8, Math.min(box.left, innerWidth - tools.offsetWidth - 8)) + 'px';
+}
+function hideLinkTools() { $('link-tools').hidden = true; linkFor = null; }
+
+function applyLinkTools() {
+  if (!linkFor) return;
+  const current = linkRangeAt(linkFor.from + 1) || linkFor;
+  const target = [...document.querySelectorAll('#link-tools input[data-target]')].find(i => i.checked)?.dataset.target;
+  const rel = [...document.querySelectorAll('#link-tools input[data-rel]')].filter(i => i.checked).map(i => i.dataset.rel).join(' ');
+  const htmlAttrs = { ...(target && { target }), ...(rel && { rel }) };
+  const html = Object.keys(htmlAttrs).length > 0;
+  const attrs = { ...current.mark.attrs, rawHTML: html ? 'a' : null, htmlAttrs: html ? htmlAttrs : null };
+  const mark = current.mark.type.create(attrs);
+  pm.dispatch(pm.state.tr.removeMark(current.from, current.to, current.mark.type).addMark(current.from, current.to, mark));
+  linkFor = { ...current, mark };
+}
+
+document.querySelectorAll('#link-tools input').forEach(i => { i.onchange = applyLinkTools; });
+pm.dom.addEventListener('click', e => {
+  const a = e.target.closest && e.target.closest('a');
+  a && pm.dom.contains(a) ? showLinkTools(a) : hideLinkTools();
+});
+document.addEventListener('mousedown', e => { if (!$('link-tools').contains(e.target) && !pm.dom.contains(e.target)) hideLinkTools(); });
+$('wysiwyg').addEventListener('scroll', hideLinkTools, true);
+
 document.querySelectorAll('#img-tools button').forEach(b => {
   b.onmousedown = e => e.preventDefault();
   b.onclick = () => setImageLook('align' in b.dataset ? { align: b.dataset.align } : { size: b.dataset.size });
@@ -587,7 +686,37 @@ document.querySelectorAll('#img-tools button').forEach(b => {
 function setEditorBody(body) {
   state.loading = true;
   editor.setMarkdown(body, false);
+  restoreLinkAttrs(body);
   setTimeout(() => { state.loading = false; }, 0);
+}
+
+// Give the HTML links (rawHTML "a") back the target / rel of the <a> tags in the Markdown, in
+// document order. If the counts differ, leave them alone rather than move attributes around.
+function restoreLinkAttrs(markdown) {
+  const code = /^(```|~~~)[\s\S]*?^\1|`[^`\n]*`/gm;
+  const tags = [...markdown.replace(code, '').matchAll(/<a\b([^>]*)>/gi)].map(m => {
+    const attrs = {};
+    for (const [, k, v1, v2] of m[1].matchAll(/([\w-]+)\s*=\s*(?:"([^"]*)"|'([^']*)')/g)) {
+      if (LINK_ATTRS.includes(k.toLowerCase())) attrs[k.toLowerCase()] = v1 ?? v2;
+    }
+    return attrs;
+  });
+  const runs = [];              // [from, to, mark] of each HTML link, in order
+  pm.state.doc.descendants((node, pos) => {
+    if (!node.isText) return;
+    const mark = node.marks.find(m => m.type.name === 'link' && m.attrs.rawHTML);
+    if (!mark) return;
+    const last = runs[runs.length - 1];
+    if (last && last[1] === pos && last[2].eq(mark)) last[1] = pos + node.nodeSize;
+    else runs.push([pos, pos + node.nodeSize, mark]);
+  });
+  if (!runs.length || runs.length !== tags.length) return;
+  const tr = pm.state.tr;
+  runs.forEach(([from, to, mark], i) => {
+    if (!Object.keys(tags[i]).length) return;
+    tr.removeMark(from, to, mark.type).addMark(from, to, mark.type.create({ ...mark.attrs, htmlAttrs: tags[i] }));
+  });
+  if (tr.docChanged || tr.steps.length) pm.dispatch(tr.setMeta('addToHistory', false));
 }
 
 // The post as it currently stands in whichever editing view is active.
