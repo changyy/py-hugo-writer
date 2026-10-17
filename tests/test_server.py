@@ -44,6 +44,9 @@ def test_serves_the_editor_and_its_vendored_files(app):
     status, ctype, js = request(app, 'GET', '/static/vendor/toastui-editor-3.2.2/toastui-editor-all.min.js')
     assert status == 200 and 'javascript' in ctype and b'@toast-ui/editor' in js
     assert request(app, 'GET', '/static/../server.py')[0] == 404
+    for icon, ctype in (('favicon.ico', 'image/'), ('favicon-32.png', 'image/png'), ('icon-512.png', 'image/png')):
+        status, got, _ = request(app, 'GET', f'/static/{icon}')
+        assert status == 200 and got.startswith(ctype)
 
 
 def test_rejects_other_hosts(app):

@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.20261017.1093729
+
+- A logo: a fountain-pen nib whose slit forms an "H". Favicon for the editor tab, next to the site name,
+  and at the top of the README.
+
 ## 1.20261017.1093336
 
 - Drag images to move them in the WYSIWYG view (TOAST UI blocks this on its own); dropped at the start or

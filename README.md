@@ -1,3 +1,5 @@
+<p align="center"><img src="https://raw.githubusercontent.com/changyy/py-hugo-writer/main/docs/logo.png" alt="hugo-writer" width="128"></p>
+
 # hugo-writer
 
 [![PyPI](https://img.shields.io/pypi/v/hugo-writer.svg)](https://pypi.org/project/hugo-writer/)
