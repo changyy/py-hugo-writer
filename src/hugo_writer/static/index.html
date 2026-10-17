@@ -41,14 +41,14 @@ aside { display: flex; flex-direction: column; min-height: 0; border-right: 1px 
 .side-head { padding: 12px; display: grid; gap: 8px; border-bottom: 1px solid var(--border); }
 .side-head .row { display: flex; gap: 8px; align-items: center; }
 .side-head .row > :first-child { flex: 1; min-width: 0; }
-.site-name { display: flex; align-items: center; gap: 8px; font-weight: 600; overflow: hidden; white-space: nowrap; }
-.site-name img { width: 26px; height: 26px; flex: none; }
-.site-name span { overflow: hidden; text-overflow: ellipsis; }
+.site-name { font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .count { color: var(--muted); font-size: 12px; }
 .side-foot { display: flex; gap: 8px; padding: 8px 12px; border-top: 1px solid var(--border); }
 .side-foot select { flex: 1; min-width: 0; }
-.about { padding: 0 12px 8px; font-size: 11px; color: var(--muted); }
-.about a { color: var(--muted); }
+.about { padding: 0 12px 10px; font-size: 11px; }
+.about a { display: inline-flex; align-items: center; gap: 6px; color: var(--muted); text-decoration: none; }
+.about a:hover { color: var(--text); }
+.about img { width: 18px; height: 18px; }
 #library-btn { width: 100%; }
 main.library-mode > .toolbar, main.library-mode > .notice, main.library-mode > .panes { display: none; }
 #library { display: none; flex-direction: column; flex: 1; min-height: 0; }
@@ -145,7 +145,7 @@ dialog .actions { display: flex; justify-content: flex-end; gap: 8px; }
 <body>
 <aside>
   <div class="side-head">
-    <div class="row"><span class="site-name"><img src="/static/icon-512.png" alt=""><span id="site-name">…</span></span><button class="primary" id="new-btn" data-i18n="newPost"></button></div>
+    <div class="row"><span class="site-name" id="site-name">…</span><button class="primary" id="new-btn" data-i18n="newPost"></button></div>
     <input type="search" id="search" data-i18n-placeholder="search">
     <div class="row">
       <select id="filter">
@@ -163,7 +163,7 @@ dialog .actions { display: flex; justify-content: flex-end; gap: 8px; }
     <select id="lang" aria-label="Language"><option value="en">English</option><option value="zh-TW">繁體中文</option></select>
     <button id="settings-btn" data-i18n-title="settings" aria-label="Settings">⚙</button>
   </div>
-  <div class="about"><a id="about" href="https://pypi.org/project/hugo-writer/" target="_blank" rel="noopener">hugo-writer</a></div>
+  <div class="about"><a id="about" href="https://pypi.org/project/hugo-writer/" target="_blank" rel="noopener"><img src="/static/icon-512.png" alt=""><span id="about-text">hugo-writer</span></a></div>
 </aside>
 
 <main>
@@ -1090,9 +1090,9 @@ layout();
   try {
     state.info = await api('GET', '/api/info');
     $('site-name').textContent = state.info.name;
-    $('site-name').parentElement.title = state.info.root;
+    $('site-name').title = state.info.root;
     document.title = `${state.info.name} · hugo-writer`;
-    $('about').textContent = `hugo-writer ${state.info.version}`;
+    $('about-text').textContent = `hugo-writer ${state.info.version}`;
     $('about').title = 'pypi.org/project/hugo-writer';
     $('imgsize').options[0].textContent = t('sizeOriginal', { max: state.info.settings.image_max_width });
     await loadPosts();

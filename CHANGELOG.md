@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.20261017.1102122
+
+- The logo moves from the site name (it read as the site's own logo) to the version line at the
+  bottom left, which links to PyPI.
+
 ## 1.20261017.1101806
 
 - Image library: every image of the site, the posts linking to it (click to edit), filters for unused
