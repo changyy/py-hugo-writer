@@ -275,7 +275,8 @@ const I18N = {
     libraryUsed: 'In use', libraryNames: 'Not named after their post', libraryBack: 'Back to posts',
     libraryHint: 'Every image of the site, and the posts that link to it. Click a post to edit it.',
     belongsTo: 'in', notInBundle: 'not in a post folder', usedBy: 'used by {n} post(s)', usedByNone: 'not used',
-    renameOne: 'Rename', renameAll: 'Tidy names ({n})', renamed: 'Renamed {n} image(s)',
+    renameOne: 'Rename', renameAll: 'Tidy names ({n})',
+    renamePrompt: 'New name for {name}\n(letters, digits and "-"; the extension stays. Leave empty for {auto}.)', renamed: 'Renamed {n} image(s)',
     renameSkipped: 'These posts link to the image but are not Markdown, so they were not updated:\n\n{posts}',
     confirmDeleteRefs: 'Delete {name}?\n\nIt is used by {n} post(s), which will show a broken image:\n{posts}',
     settings: 'Settings', setName: 'Name images', setNameSlug: 'After the post: {slug}-01, {slug}-02 … (recommended)',
@@ -310,7 +311,8 @@ const I18N = {
     libraryUsed: '使用中', libraryNames: '檔名未依文章命名', libraryBack: '回到文章',
     libraryHint: '整個網站的圖片，以及引用它的文章。點文章即可開啟修改。',
     belongsTo: '屬於', notInBundle: '不在文章資料夾', usedBy: '{n} 篇文章使用', usedByNone: '沒有文章使用',
-    renameOne: '改名', renameAll: '整理檔名 ({n})', renamed: '已改名 {n} 張圖片',
+    renameOne: '改名', renameAll: '整理檔名 ({n})',
+    renamePrompt: '{name} 的新名稱\n（英文、數字和「-」，副檔名不變；清空則自動取 {auto}）', renamed: '已改名 {n} 張圖片',
     renameSkipped: '以下文章也引用這張圖，但不是 Markdown，沒有自動更新：\n\n{posts}',
     confirmDeleteRefs: '刪除 {name}？\n\n有 {n} 篇文章使用它，刪除後會變成破圖：\n{posts}',
     settings: '設定', setName: '圖片命名', setNameSlug: '依文章：{slug}-01、{slug}-02 …（建議）',
@@ -832,12 +834,9 @@ function renderImages() {
     const actions = document.createElement('div'); actions.className = 'actions';
     const insert = document.createElement('button'); insert.textContent = t('insert'); insert.onclick = () => insertImage(i.url);
     const del = document.createElement('button'); del.textContent = t('remove'); del.onclick = () => deleteImages([i]);
-    actions.append(insert);
-    if (!namedAfterPost(i.name, slug)) {
-      const rename = document.createElement('button'); rename.textContent = t('renameOne'); rename.onclick = () => renameImages([i]);
-      actions.append(rename);
-    }
-    actions.append(del);
+    const rename = document.createElement('button'); rename.textContent = t('renameOne');
+    rename.onclick = () => renameOne({ post: state.current.path, name: i.name }, slug);
+    actions.append(insert, rename, del);
     info.append(name, meta, actions);
     li.append(thumb, info);
     return li;
@@ -888,20 +887,42 @@ $('images-close').onclick = () => { $('images-panel').hidden = true; };
 $('delete-unused').onclick = () => deleteImages(state.images.filter(i => !linksTo(currentText(), i.url)));
 $('rename-all').onclick = () => renameImages(state.images.filter(i => !namedAfterPost(i.name, postSlug(state.current.path))));
 
-// Rename to {slug}-NN; the server rewrites every Markdown post linking to the image.
-async function renameImages(images, post = state.current?.path) {
-  if (!images.length || !post) return;
-  if (state.current?.path === post) await save();
+// Renames go one at a time: a second click while one runs would ask for a file that is already
+// gone. The server rewrites every Markdown post linking to the image.
+async function runRenames(requests, post) {
+  if (state.renaming || !requests.length) return;
+  state.renaming = true;
+  document.querySelectorAll('#images-panel button, #library-list button').forEach(b => { b.disabled = true; });
+  if (post && state.current?.path === post) await save();
   const skipped = [];
+  let done = 0, error = null;
   try {
-    for (const i of images) {
-      const res = await api('POST', '/api/image/rename', { post, name: i.name });
+    for (const body of requests) {
+      const res = await api('POST', '/api/image/rename', body);
       skipped.push(...res.skipped.map(r => '• ' + r.title));
+      done++;
     }
-    status(t('renamed', { n: images.length }));
-  } catch (e) { status(e.message, true); }
+  } catch (e) { error = e; }
+  state.renaming = false;
   if (skipped.length) alert(t('renameSkipped', { posts: [...new Set(skipped)].join('\n') }));
-  if (state.current?.path === post && !document.querySelector('main').classList.contains('library-mode')) await openPost(post);
+  if (document.querySelector('main').classList.contains('library-mode')) await openLibrary();
+  else if (post && state.current?.path === post) await openPost(post);
+  else renderImages();
+  // After reloading, which clears the status line.
+  error ? status(error.message, true) : status(t('renamed', { n: done }));
+}
+
+// Tidy names: every given image of the open post to {slug}-NN.
+function renameImages(images, post = state.current?.path) {
+  return runRenames(images.map(i => ({ post, name: i.name })), post);
+}
+
+// Rename one image to a name you type ({post, name} or {file}); empty means {slug}-NN.
+function renameOne(target, slug) {
+  const name = target.name || target.file.split('/').pop();
+  const typed = prompt(t('renamePrompt', { name, auto: `${slug}-NN` }), name.replace(/\.[^.]*$/, ''));
+  if (typed === null) return;
+  return runRenames([{ ...target, new_name: typed.trim() }], target.post);
 }
 
 // -- the image library: every image of the site ---------------------------------
@@ -965,11 +986,9 @@ function renderLibrary() {
       info.append(refs);
     }
     const actions = document.createElement('div'); actions.className = 'actions';
-    if (i.owner && !namedAfterPost(i.name, postSlug(i.owner.path))) {
-      const rename = document.createElement('button'); rename.textContent = t('renameOne');
-      rename.onclick = async () => { await renameImages([i], i.owner.path); await openLibrary(); };
-      actions.append(rename);
-    }
+    const rename = document.createElement('button'); rename.textContent = t('renameOne');
+    rename.onclick = () => renameOne({ file: i.file }, i.owner ? postSlug(i.owner.path) : i.file.split('/').slice(-2, -1)[0]);
+    actions.append(rename);
     const del = document.createElement('button'); del.textContent = t('remove');
     del.onclick = async () => {
       const ask = i.refs.length

@@ -235,7 +235,7 @@ class Site:
 
     # -- the whole site's images -------------------------------------------------
 
-    def library(self, only_post: str | None = None) -> list[dict]:
+    def library(self, only_post: str | None = None, only_folder: Path | None = None) -> list[dict]:
         """Every image of the site — in page bundles and in static/images/ — with the posts using it.
 
         A post uses an image when its text links to it: by file name from the bundle's own page,
@@ -257,8 +257,9 @@ class Site:
         files = [f for base in (self.content, static) if base.is_dir() for f in sorted(base.rglob('*'))
                  if f.is_file() and f.suffix.lower() in IMAGE_SUFFIXES]
         if only_post:
-            folder, _ = self.image_target(only_post)
-            files = [f for f in files if f.parent == folder]
+            only_folder, _ = self.image_target(only_post)
+        if only_folder is not None:
+            files = [f for f in files if f.parent == only_folder]
         items = []
         for f in files:
             owner = owners.get(f.parent)
@@ -310,19 +311,42 @@ class Site:
             raise SiteError(f'not an image of this site: {rel}')
         path.unlink()
 
-    def rename_image(self, rel: str, name: str) -> dict:
-        """Give a post's image the next {slug}-NN name and update every post linking to it.
-
-        Returns the new name, the posts rewritten, and the ones that link to it but can't be
-        edited here (HTML content), which the caller should point out.
-        """
-        folder, prefix = self.image_target(rel)
-        old = folder / name
-        if not name or name != Path(name).name or old.suffix.lower() not in IMAGE_SUFFIXES or not old.is_file():
+    def rename_image(self, rel: str, name: str, new_name: str = '') -> dict:
+        """Rename one of a post's images (see rename_file)."""
+        folder, _ = self.image_target(rel)
+        if not name or name != Path(name).name:
             raise SiteError(f'no such image: {name}')
-        from .images import image_path            # avoid a cycle at import time
-        new = image_path(folder, '{slug}-{n}', self.image_slug(rel), name, old.suffix.lower())
-        before = next(i for i in self.library(only_post=rel) if i['name'] == name)
+        return self.rename_file((folder / name).relative_to(self.root).as_posix(), new_name)
+
+    def rename_file(self, file: str, new_name: str = '') -> dict:
+        """Rename an image and update every Markdown post linking to it.
+
+        new_name is made URL-safe and keeps the file's extension; empty picks the next
+        {slug}-NN. Returns the new name, the posts rewritten, and the ones that link to the image
+        but can't be edited here (HTML content), which the caller should point out.
+        """
+        from .images import image_path, safe_stem           # avoid a cycle at import time
+        old = (self.root / file).resolve()
+        static = self.root / 'static' / 'images'
+        inside = old.is_relative_to(self.content) or old.is_relative_to(static)
+        if not inside or old.suffix.lower() not in IMAGE_SUFFIXES or not old.is_file():
+            raise SiteError(f'no such image: {file}')
+        before = next((i for i in self.library(only_folder=old.parent) if i['name'] == old.name), None)
+        if before is None:
+            raise SiteError(f'no such image: {file}')
+        ext = old.suffix.lower()
+        if new_name.strip():
+            stem = safe_stem(new_name.strip() + '.x')
+            if stem.lower().endswith(ext):                   # "photo.webp" typed in full
+                stem = stem[:-len(ext)]
+            new = old.parent / f'{stem}{ext}'
+            if new == old:
+                return {'name': old.name, 'updated': [], 'skipped': []}
+            if new.exists():
+                raise SiteError(f'{new.name} already exists')
+        else:
+            slug = self.image_slug(before['owner']['path']) if before['owner'] else old.parent.name
+            new = image_path(old.parent, '{slug}-{n}', slug, old.name, ext)
         old.rename(new)
         updated, skipped = [], []
         for ref in before['refs']:
@@ -334,11 +358,10 @@ class Site:
             if before['url']:
                 text = replace_links(text, before['url'], folder_of_url_join(before['url'], new.name))
             if before['owner'] and before['owner']['path'] == ref['path']:
-                text = replace_links(text, prefix + name, prefix + new.name)
+                text = replace_links(text, old.name, new.name)
             atomic_write(path, text.encode('utf-8'))
             updated.append(ref['path'])
-        return {'name': new.name, 'updated': updated, 'skipped': skipped}
-
+        return {'name': new.name, 'file': new.relative_to(self.root).as_posix(), 'updated': updated, 'skipped': skipped}
 
 def folder_of(url: str) -> str:
     """Where Hugo publishes a bundle's files: /a/b/ for /a/b/, and /a/b/ for /a/b.html too."""

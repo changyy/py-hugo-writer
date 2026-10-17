@@ -194,8 +194,12 @@ class Handler(BaseHTTPRequestHandler):
         self._json({'ok': True})
 
     def rename_image(self):
-        data = json.loads(self._body())
-        self._json(self.server.site.rename_image(data.get('post', ''), data.get('name', '')))
+        # {post, name} for a post's image, or {file} from the library; new_name empty = {slug}-NN.
+        data, site = json.loads(self._body()), self.server.site
+        if data.get('file'):
+            self._json(site.rename_file(data['file'], data.get('new_name', '')))
+        else:
+            self._json(site.rename_image(data.get('post', ''), data.get('name', ''), data.get('new_name', '')))
 
     def save_settings(self):
         site = self.server.site

@@ -1,5 +1,12 @@
 # Changelog
 
+## 1.20261017.1102445
+
+- Rename any image to a name you type (URL-safe, extension kept), or leave it empty for `{slug}-NN`,
+  from the image panel or the library; images in `static/images/` too.
+- Fix: renaming an image that was already renamed (e.g. a double click) crashed the request; renames
+  now run one at a time, buttons are disabled meanwhile, and a missing image is reported.
+
 ## 1.20261017.1102122
 
 - The logo moves from the site name (it read as the site's own logo) to the version line at the

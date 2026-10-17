@@ -197,3 +197,28 @@ def test_settings_save_keeps_comments_and_validates(site_dir):
     for bad in ({'image_quality': 0}, {'image_format': 'bmp'}, {'image_name': '{nope}'}, {'colour': 'red'}):
         with pytest.raises(SiteError):
             site.settings.save(site.root, bad)
+
+
+@needs_hugo
+def test_rename_to_a_chosen_name(site):
+    other = site.create('Other', 'other', now=NOW)
+    site.write(other, site.read(other) + '\n![](/2024/05/hello-markdown/sample.webp)\n')
+    result = site.rename_image(BUNDLE, 'sample.webp', 'GA4 Traffic Map')
+    assert result['name'] == 'ga4-traffic-map.webp'
+    assert '![](ga4-traffic-map.webp)' in site.read(BUNDLE)
+    assert '![](/2024/05/hello-markdown/ga4-traffic-map.webp)' in site.read(other)
+    assert site.rename_image(BUNDLE, 'ga4-traffic-map.webp', 'ga4-traffic-map.webp')['updated'] == []  # unchanged
+    (site.root / 'content/posts/2024/05/hello-markdown/taken.webp').write_bytes(b'x')
+    with pytest.raises(SiteError):
+        site.rename_image(BUNDLE, 'ga4-traffic-map.webp', 'taken')
+
+
+@needs_hugo
+def test_rename_a_static_image(site):
+    static = site.root / 'static/images/posts/2024/06/a-draft'
+    static.mkdir(parents=True)
+    (static / 'Shot 1.png').write_bytes(b'x')
+    site.write(DRAFT, site.read(DRAFT) + '\n![](/images/posts/2024/06/a-draft/Shot 1.png)\n')
+    result = site.rename_file('static/images/posts/2024/06/a-draft/Shot 1.png')
+    assert result['name'] == 'a-draft-01.png' and result['updated'] == [DRAFT]
+    assert '/images/posts/2024/06/a-draft/a-draft-01.png' in site.read(DRAFT)

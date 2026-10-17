@@ -166,3 +166,14 @@ def test_images_are_served_from_disk_even_when_hugo_would_not(site):
     finally:
         app.shutdown()
         app.server_close()
+
+
+@needs_hugo
+def test_renaming_twice_is_an_error_not_a_crash(app):
+    body = json.dumps({'post': BUNDLE, 'name': 'sample.webp', 'new_name': 'chosen'})
+    status, _, data = request(app, 'POST', '/api/image/rename', body, WRITE)
+    assert status == 200 and json.loads(data)['name'] == 'chosen.webp'
+    status, _, data = request(app, 'POST', '/api/image/rename', body, WRITE)   # the file is gone now
+    assert status == 400 and 'no such image' in json.loads(data)['error']
+    file = json.dumps({'file': 'content/posts/2024/05/hello-markdown/chosen.webp', 'new_name': ''})
+    assert json.loads(request(app, 'POST', '/api/image/rename', file, WRITE)[2])['name'] == 'hello-markdown-01.webp'

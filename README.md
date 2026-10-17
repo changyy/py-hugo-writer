@@ -119,8 +119,9 @@ absolute path of the file it exported to, e.g. `/Users/you/…`) — and, since 
 them, any `<script>` or `on…` attribute. What is *in* the picture (an e-mail address in a
 screenshot, a face) is up to you.
 
-Images uploaded before (or with `image_name = "{original}"`) can be renamed to
-`{slug}-NN` from the image panel or the image library; every Markdown post linking to the
+Any image can be renamed from the image panel or the image library: type a name (made
+URL-safe, extension kept) or leave it empty for the next `{slug}-NN`; **Tidy names** does
+that for every image of a post not named after it yet. Every Markdown post linking to the
 image — by file name or by its published URL — is updated.
 
 #### Moving and aligning
