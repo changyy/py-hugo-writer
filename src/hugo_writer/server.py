@@ -173,7 +173,9 @@ class Handler(BaseHTTPRequestHandler):
         folder, prefix = site.image_target(q.get('post', ''))
         name = q.get('name') or 'image.png'
         s = site.settings
-        data, ext = images.process(self._body(), name, s.image_max_width, s.image_format, s.image_quality)
+        # ?width= picks a smaller size for this image (the editor's image size menu), never a larger one.
+        width = min(int(q.get('width') or 0) or s.image_max_width, s.image_max_width)
+        data, ext = images.process(self._body(), name, width, s.image_format, s.image_quality)
         folder.mkdir(parents=True, exist_ok=True)
         path = images.image_path(folder, s.image_name, site.image_slug(q.get('post', '')), name, ext)
         atomic_write(path, data)

@@ -124,6 +124,13 @@ dialog .actions { display: flex; justify-content: flex-end; gap: 8px; }
       <button data-view="preview" data-i18n="viewPreview" aria-pressed="false"></button>
     </div>
     <label id="split-wrap"><input type="checkbox" id="split"> <span data-i18n="split"></span></label>
+    <label id="imgsize-wrap" hidden><span data-i18n="imageSize"></span>
+      <select id="imgsize">
+        <option value="0" data-i18n="sizeOriginal"></option>
+        <option value="512" data-i18n="sizeLarge"></option>
+        <option value="256" data-i18n="sizeMedium"></option>
+        <option value="128" data-i18n="sizeSmall"></option>
+      </select></label>
     <a id="open-link" target="_blank" rel="noopener" hidden data-i18n="open"></a>
   </div>
   <div class="notice" id="notice" hidden></div>
@@ -159,6 +166,7 @@ const I18N = {
     newPost: 'New post', search: 'Search titles', filterAll: 'All posts', filterDrafts: 'Drafts',
     filterPublished: 'Published', filterEditable: 'Markdown only', noPost: 'No post open', draft: 'Draft',
     viewWysiwyg: 'WYSIWYG', viewSource: 'Source', viewPreview: 'Hugo preview', split: 'Side-by-side preview',
+    imageSize: 'Images:', sizeOriginal: 'Original (max {max})', sizeLarge: 'Large 512', sizeMedium: 'Medium 256', sizeSmall: 'Small 128',
     open: 'Open ↗', noPreview: 'No preview', frontMatter: 'Front matter',
     empty: 'Pick a post on the left, or create a new one.<br>Switch between WYSIWYG, the source file and the Hugo preview at the top right.<br>Drop or paste images; they are resized and saved next to the post.',
     title: 'Title', slug: 'Slug', slugHint: 'Part of the URL: a-z, 0-9 and "-". Filled in from an English title.',
@@ -173,6 +181,7 @@ const I18N = {
     newPost: '新增文章', search: '搜尋標題', filterAll: '全部文章', filterDrafts: '草稿',
     filterPublished: '已發布', filterEditable: '只看 Markdown', noPost: '尚未開啟文章', draft: '草稿',
     viewWysiwyg: '所見即所得', viewSource: '原始檔', viewPreview: 'Hugo 預覽', split: '並排預覽',
+    imageSize: '圖片：', sizeOriginal: '原始（最寬 {max}）', sizeLarge: '大 512', sizeMedium: '中 256', sizeSmall: '小 128',
     open: '開新分頁 ↗', noPreview: '沒有預覽', frontMatter: '文章設定（front matter）',
     empty: '從左側挑一篇文章，或新增一篇。<br>右上角可切換：所見即所得、原始檔、Hugo 預覽。<br>拖拉或貼上圖片，會自動縮小並存在文章旁邊。',
     title: '標題', slug: '網址代稱', slugHint: '會成為網址的一部分：a-z、0-9 和「-」。英文標題會自動帶入。',
@@ -318,6 +327,7 @@ function layout() {
   $('preview-pane').hidden = !showPreview;
   $('panes').classList.toggle('split', showPreview && view !== 'preview');
   $('split-wrap').hidden = !hasPreview || view === 'preview';
+  $('imgsize-wrap').hidden = !post?.editable || view === 'preview';
   $('empty').hidden = !!post;
   $('front').hidden = $('wysiwyg').hidden = !post || !post.editable || view !== 'wysiwyg';
   $('source').hidden = !post || view !== 'source';
@@ -463,7 +473,8 @@ async function uploadImage(file) {
   const name = file.name && file.name !== 'image.png' ? file.name : `pasted-${Date.now()}.png`;
   try {
     status(t('uploading', { name }));
-    const res = await api('POST', `/api/image?post=${encodeURIComponent(state.current.path)}&name=${encodeURIComponent(name)}`, file, true);
+    const width = $('imgsize').value;
+    const res = await api('POST', `/api/image?post=${encodeURIComponent(state.current.path)}&name=${encodeURIComponent(name)}&width=${width}`, file, true);
     status(t('imageSaved', { file: res.file, kb: Math.round(res.bytes / 1024) }));
     return res;
   } catch (e) { status(t('imageFailed', { error: e.message }), true); return null; }
@@ -532,6 +543,9 @@ $('draft').onchange = e => setDraft(e.target.checked);
 $('search').oninput = renderList;
 $('filter').onchange = renderList;
 document.querySelectorAll('#views button').forEach(b => { b.onclick = () => setView(b.dataset.view); });
+// Image size for new drops: resized to that width when saved (and so shown at that width).
+$('imgsize').value = ['0', '512', '256', '128'].includes(load('imgsize')) ? load('imgsize') : '0';
+$('imgsize').onchange = e => store('imgsize', e.target.value);
 $('split').checked = state.split;
 $('split').onchange = e => { state.split = e.target.checked; store('split', state.split ? '1' : '0'); layout(); };
 $('lang').value = LANG;
@@ -550,6 +564,7 @@ layout();
     $('site-name').textContent = state.info.name;
     $('site-name').title = state.info.root;
     document.title = `${state.info.name} · hugo-writer`;
+    $('imgsize').options[0].textContent = t('sizeOriginal', { max: state.info.settings.image_max_width });
     await loadPosts();
     // ?open=content/posts/…/index.md opens a post directly (handy for bookmarks).
     const open = new URLSearchParams(location.search).get('open');

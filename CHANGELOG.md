@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.20261017.1091404
+
+- Image size menu in the toolbar: Original (max 1024) | Large 512 | Medium 256 | Small 128. New images
+  are saved at that width (and so shown at it); the choice is remembered.
+
 ## 1.20261017.1090629
 
 - Dropped images are named after the post (my-post-01.webp, my-post-02.webp, …) instead of the

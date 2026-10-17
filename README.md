@@ -105,6 +105,11 @@ The original file name is not used, nor put in the alt text (which starts as the
 title): names like `Screenshot 2026-10-17 at 08.58.07.png` give away when, and often
 what, you captured. Set `image_name = "{original}"` to keep the original names.
 
+The **Images** menu in the toolbar picks the width new images are saved at: Original
+(`image_max_width`, 1024 by default), Large 512, Medium 256 or Small 128. Markdown has no
+size syntax, so the file itself is that size and shows at that width (a small image looks
+softer on high-density screens).
+
 Posts that are not page bundles get `static/images/<post path>/` instead.
 
 If your posts use a `url` that ends in `.html` (for example `/2026/10/my-slug.html`),

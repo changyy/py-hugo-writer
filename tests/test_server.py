@@ -108,3 +108,14 @@ def test_posts_with_html_blocks_are_flagged(app):
     assert json.loads(data)['has_html'] is True
     _, _, data = request(app, 'GET', f'/api/post?path={BUNDLE}')
     assert json.loads(data)['has_html'] is False
+
+
+def test_image_width_picks_a_smaller_size_only(app):
+    from PIL import Image
+    import io
+    post = BUNDLE
+    for asked, got in ((256, 256), (0, 1024), (5000, 1024)):
+        _, _, data = request(app, 'POST', f'/api/image?post={post}&name=a.png&width={asked}', png(2000, 1000),
+                             {'X-Hugo-Writer': '1'})
+        saved = app.site.root / json.loads(data)['file']
+        assert Image.open(io.BytesIO(saved.read_bytes())).width == got
