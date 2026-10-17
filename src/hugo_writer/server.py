@@ -175,7 +175,7 @@ class Handler(BaseHTTPRequestHandler):
         s = site.settings
         data, ext = images.process(self._body(), name, s.image_max_width, s.image_format, s.image_quality)
         folder.mkdir(parents=True, exist_ok=True)
-        path = images.unique_path(folder, images.safe_stem(name), ext)
+        path = images.image_path(folder, s.image_name, site.image_slug(q.get('post', '')), name, ext)
         atomic_write(path, data)
         self._json({'url': prefix + path.name, 'file': path.relative_to(site.root).as_posix(), 'bytes': len(data)})
 

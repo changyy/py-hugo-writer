@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.20261017.1090629
+
+- Dropped images are named after the post (my-post-01.webp, my-post-02.webp, …) instead of the
+  uploaded file, and their alt text starts as the post title: screenshot and camera file names
+  carry dates and more. `image_name = "{original}"` brings the old behaviour back.
+
 ## 1.20261017.1090054
 
 - Images dropped or pasted into the WYSIWYG view no longer show as broken: they are inserted once the

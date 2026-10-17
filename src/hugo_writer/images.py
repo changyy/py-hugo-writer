@@ -49,6 +49,19 @@ def safe_stem(filename: str) -> str:
     return stem or 'image'
 
 
+def image_path(folder: Path, pattern: str, slug: str, original: str, ext: str) -> Path:
+    """A free file name from the image_name pattern, e.g. "{slug}-{n}" -> my-post-01.webp."""
+    def name(n):
+        # safe_stem() drops a file extension; the '.x' keeps a slug like "v1.2" whole.
+        return safe_stem(pattern.format(slug=slug, n=f'{n:02d}', original=safe_stem(original)) + '.x')
+    if '{n}' not in pattern:
+        return unique_path(folder, name(1), ext)
+    n = 1
+    while (folder / f'{name(n)}{ext}').exists():
+        n += 1
+    return folder / f'{name(n)}{ext}'
+
+
 def unique_path(folder: Path, stem: str, ext: str) -> Path:
     path, n = folder / f'{stem}{ext}', 2
     while path.exists():

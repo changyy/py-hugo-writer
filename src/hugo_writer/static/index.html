@@ -269,7 +269,7 @@ const editor = new toastui.Editor({
     addImageBlobHook: (blob, done) => {
       // Insert only once the preview serves the new file: inserted any earlier, the browser
       // gets a 404 while hugo is still picking the file up and keeps showing a broken image.
-      uploadImage(blob).then(async r => { if (r) { await imageReady(r.url); done(r.url, ''); } });
+      uploadImage(blob).then(async r => { if (r) { await imageReady(r.url); done(r.url, imageAlt()); } });
       return false;
     },
   },
@@ -439,6 +439,12 @@ async function setDraft(draft) {
 
 // -- images -------------------------------------------------------------------
 
+// Alt text for a new image: the post title, not the file name (which may carry dates, names, …).
+// The editor would fall back to the file name for an empty alt, so give it this instead.
+function imageAlt() {
+  return (state.current?.title || '').replace(/[\[\]]/g, '');
+}
+
 // Wait (up to ~10 s) until an uploaded image is served at its URL, resolved like the editor
 // resolves it (against <base>, i.e. the post's folder, through the preview proxy).
 async function imageReady(url) {
@@ -469,7 +475,7 @@ async function sourceImages(files) {
   for (const file of files) {
     const res = await uploadImage(file);
     if (!res) continue;
-    ta.setRangeText(`![](${res.url})\n`, ta.selectionStart, ta.selectionEnd, 'end');
+    ta.setRangeText(`![${imageAlt()}](${res.url})\n`, ta.selectionStart, ta.selectionEnd, 'end');
     changed();
   }
 }

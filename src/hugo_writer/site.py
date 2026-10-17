@@ -39,6 +39,9 @@ class Settings:
     image_max_width: int = 1024
     image_format: str = 'webp'
     image_quality: int = 82
+    # File name for dropped images: {slug} (the post's), {n} (01, 02, …), {original} (the file's own
+    # name). The default keeps camera / screenshot names, which carry dates and more, off the site.
+    image_name: str = '{slug}-{n}'
 
     @classmethod
     def load(cls, root: Path) -> 'Settings':
@@ -143,6 +146,11 @@ class Site:
         return page.relative_to(self.root).as_posix()
 
     # -- images ------------------------------------------------------------------
+
+    def image_slug(self, rel: str) -> str:
+        """The post's slug: its bundle folder (…/slug/index.md) or its file name (…/slug.md)."""
+        post = self.resolve(rel)
+        return post.parent.name if post.stem in ('index', '_index') else post.stem
 
     def image_target(self, rel: str) -> tuple[Path, str]:
         """Where images for a post are stored, and the Markdown link prefix for them.

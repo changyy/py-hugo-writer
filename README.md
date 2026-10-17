@@ -29,7 +29,7 @@ to your content folder. No server to host, no account, no database — just your
 | 3 | Side-by-side preview while you write | the preview reloads on every save |
 | 4 | Markdown throughout: code fences, tables, lists, links | posts stay plain `.md` files |
 | 5 | Drafts | new posts start as drafts; one checkbox flips `draft` in the front matter |
-| 6 | Drop or paste images (screenshots too) | scaled to 1024 px wide, re-encoded as WebP, EXIF (GPS) stripped, saved next to the post |
+| 6 | Drop or paste images (screenshots too) | scaled to 1024 px wide, re-encoded as WebP, EXIF (GPS) stripped, named after the post, saved next to it |
 | 7 | Autosave | a second after you stop typing, or ⌘S / Ctrl+S |
 | 8 | English and Traditional Chinese UI | follows the browser language; switch at the bottom left |
 
@@ -92,12 +92,18 @@ interfere with a `hugo server` you already run), then opens the editor at
 ### 3. Images
 
 Drop or paste an image into either editing view. It is scaled down to
-`image_max_width`, re-encoded (WebP by default), stripped of EXIF, and saved:
+`image_max_width`, re-encoded (WebP by default), stripped of EXIF, named after the
+post, and saved next to it:
 
 ```
 content/posts/2026/10/my-slug/index.md
-content/posts/2026/10/my-slug/screenshot.webp     ← ![](screenshot.webp)
+content/posts/2026/10/my-slug/my-slug-01.webp     ← ![Post title](my-slug-01.webp)
+content/posts/2026/10/my-slug/my-slug-02.webp
 ```
+
+The original file name is not used, nor put in the alt text (which starts as the post
+title): names like `Screenshot 2026-10-17 at 08.58.07.png` give away when, and often
+what, you captured. Set `image_name = "{original}"` to keep the original names.
 
 Posts that are not page bundles get `static/images/<post path>/` instead.
 
@@ -121,6 +127,7 @@ url = "/{year}/{month}/{slug}.html"    # front matter `url` for new posts; omit 
 image_max_width = 1024
 image_format = "webp"                  # or "jpeg", "png"
 image_quality = 82
+image_name = "{slug}-{n}"              # {slug}, {n} (01, 02, …), {original} (the uploaded file's name)
 ```
 
 `{year}`, `{month}`, `{day}` and `{slug}` are filled in when the post is created.

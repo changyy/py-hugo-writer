@@ -3,7 +3,7 @@ import io
 import pytest
 from PIL import Image
 
-from hugo_writer.images import process, safe_stem, unique_path
+from hugo_writer.images import image_path, process, safe_stem, unique_path
 
 
 def png(width, height, mode='RGB', **info):
@@ -56,3 +56,12 @@ def test_safe_stem_and_unique_path(tmp_path):
     assert safe_stem('圖.png') == 'image'
     (tmp_path / 'a.webp').write_bytes(b'')
     assert unique_path(tmp_path, 'a', '.webp').name == 'a-2.webp'
+
+
+def test_image_path_patterns(tmp_path):
+    assert image_path(tmp_path, '{slug}-{n}', 'my-post', 'Screenshot 1.png', '.webp').name == 'my-post-01.webp'
+    (tmp_path / 'my-post-01.webp').write_bytes(b'')
+    assert image_path(tmp_path, '{slug}-{n}', 'my-post', 'x.png', '.webp').name == 'my-post-02.webp'
+    assert image_path(tmp_path, '{original}', 'my-post', 'Cat Photo.PNG', '.webp').name == 'cat-photo.webp'
+    (tmp_path / 'cat-photo.webp').write_bytes(b'')
+    assert image_path(tmp_path, '{original}', 'my-post', 'Cat Photo.PNG', '.webp').name == 'cat-photo-2.webp'

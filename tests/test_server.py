@@ -68,8 +68,11 @@ def test_image_upload_lands_next_to_a_bundle_post(app):
     status, _, data = request(app, 'POST', f'/api/image?post={rel}&name=Shot.PNG', png(2000, 1000),
                               {'X-Hugo-Writer': '1'})
     res = json.loads(data)
-    assert status == 200 and res['url'] == 'shot.webp'
+    # Named after the post, not the uploaded file (screenshot names carry dates and more).
+    assert status == 200 and res['url'] == 'pics-01.webp'
     assert (app.site.root / res['file']).parent == (app.site.root / rel).parent
+    _, _, data = request(app, 'POST', f'/api/image?post={rel}&name=Other.jpg', png(10, 10), {'X-Hugo-Writer': '1'})
+    assert json.loads(data)['url'] == 'pics-02.webp'
 
 
 def test_site_urls_need_the_preview(app):
