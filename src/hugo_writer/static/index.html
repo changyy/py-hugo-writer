@@ -92,6 +92,14 @@ main { display: flex; flex-direction: column; min-width: 0; min-height: 0; }
 .panes { flex: 1; display: grid; grid-template-columns: 1fr; min-height: 0; }
 .panes.split { grid-template-columns: 1fr 1fr; }
 #editor-pane { display: flex; flex-direction: column; min-width: 0; min-height: 0; background: var(--panel); }
+#post-info { display: grid; grid-template-columns: auto 1fr auto 1fr; gap: 6px 10px; align-items: center; padding: 8px 12px;
+  border-bottom: 1px solid var(--border); background: var(--panel); font-size: 13px; }
+#post-info > span { color: var(--muted); white-space: nowrap; }
+#post-info input[type=text] { width: 100%; min-width: 0; padding: 4px 8px; }
+#post-info .featured { grid-column: 2 / -1; display: flex; gap: 8px; align-items: center; min-width: 0; }
+#post-info .featured select { min-width: 0; max-width: 360px; }
+#post-info .featured img { width: 48px; height: 36px; object-fit: cover; border-radius: 3px; background: var(--code); }
+@media (max-width: 900px) { #post-info { grid-template-columns: auto 1fr; } #post-info .featured { grid-column: 2; } }
 #front { border-bottom: 1px solid var(--border); }
 #front summary { padding: 6px 12px; cursor: pointer; color: var(--muted); font-size: 12px; user-select: none; }
 #front-text { display: block; width: 100%; min-height: 120px; resize: vertical; border: 0; border-top: 1px solid var(--border); outline: none;
@@ -204,6 +212,17 @@ dialog .actions { display: flex; justify-content: flex-end; gap: 8px; }
   <div class="panes" id="panes">
     <div id="editor-pane">
       <div class="empty" id="empty" data-i18n-html="empty"></div>
+      <div id="post-info" hidden>
+        <span data-i18n="infoTitle"></span><input type="text" id="info-title" autocomplete="off">
+        <span data-i18n="infoUrl"></span><input type="text" id="info-url" autocomplete="off" spellcheck="false">
+        <span data-i18n="infoFeatured"></span>
+        <div class="featured">
+          <img id="info-thumb" alt="" hidden>
+          <select id="info-featured"></select>
+          <button id="info-upload" data-i18n="infoUpload"></button>
+          <input type="file" id="info-file" accept="image/*" hidden>
+        </div>
+      </div>
       <details id="front" hidden><summary data-i18n="frontMatter"></summary><textarea id="front-text" spellcheck="false"></textarea></details>
       <div id="wysiwyg" hidden></div>
       <textarea id="source" hidden spellcheck="false"></textarea>
@@ -282,6 +301,18 @@ dialog .actions { display: flex; justify-content: flex-end; gap: 8px; }
       <select id="set-format"><option value="webp">WebP</option><option value="jpeg">JPEG</option><option value="png">PNG</option></select></label>
     <label><span data-i18n="setQuality"></span> <input type="number" id="set-quality" min="1" max="100"></label>
     <label class="check"><input type="checkbox" id="set-strip"> <span data-i18n="setStrip"></span></label>
+    <label><span data-i18n="setFeaturedField"></span>
+      <select id="set-featured-field">
+        <option value="images" data-i18n="setFeaturedImages"></option>
+        <option value="cover.image" data-i18n="setFeaturedCover"></option>
+        <option value="custom" data-i18n="setNameCustom"></option>
+      </select>
+      <input type="text" id="set-featured-custom" placeholder="params.image" hidden></label>
+    <label><span data-i18n="setFeaturedDefault"></span>
+      <select id="set-featured-default">
+        <option value="first" data-i18n="setFeaturedFirst"></option>
+        <option value="none" data-i18n="setFeaturedNone"></option>
+      </select></label>
     <span class="hint" data-i18n="setSavedTo"></span>
     <div class="err" id="set-err"></div>
     <div class="actions"><button value="cancel" formnovalidate data-i18n="cancel"></button><button class="primary" value="ok" data-i18n="save"></button></div>
@@ -317,6 +348,12 @@ const I18N = {
     renamePrompt: 'New name for {name}\n(letters, digits and "-"; the extension stays. Leave empty for {auto}.)', renamed: 'Renamed {n} image(s)',
     renameSkipped: 'These posts link to the image but are not Markdown, so they were not updated:\n\n{posts}',
     confirmDeleteRefs: 'Delete {name}?\n\nIt is used by {n} post(s), which will show a broken image:\n{posts}',
+    infoTitle: 'Title', infoUrl: 'URL', infoFeatured: 'Featured image', infoUpload: 'Upload…',
+    featuredNone: 'None', featuredUrlPlaceholder: 'from the site\'s permalinks: {url}',
+    urlChangeWarn: 'This post is published. Changing its URL breaks links to {old}. Change it anyway?',
+    setFeaturedField: 'Featured image is saved as', setFeaturedImages: 'images (Hugo, for link previews)',
+    setFeaturedCover: 'cover.image (PaperMod)', setFeaturedDefault: 'A post without a featured image',
+    setFeaturedFirst: 'gets the first image dropped into it', setFeaturedNone: 'stays without one',
     settings: 'Settings', setName: 'Name images', setNameSlug: 'After the post: {slug}-01, {slug}-02 … (recommended)',
     setNameOriginal: 'Keep the original file name', setNameCustom: 'Custom pattern…',
     setNameHint: '{slug} = the post\'s slug, {n} = 01, 02 …, {original} = the uploaded file\'s name',
@@ -355,6 +392,12 @@ const I18N = {
     renamePrompt: '{name} 的新名稱\n（英文、數字和「-」，副檔名不變；清空則自動取 {auto}）', renamed: '已改名 {n} 張圖片',
     renameSkipped: '以下文章也引用這張圖，但不是 Markdown，沒有自動更新：\n\n{posts}',
     confirmDeleteRefs: '刪除 {name}？\n\n有 {n} 篇文章使用它，刪除後會變成破圖：\n{posts}',
+    infoTitle: '標題', infoUrl: '網址', infoFeatured: '代表圖片', infoUpload: '上傳…',
+    featuredNone: '無', featuredUrlPlaceholder: '依網站的 permalinks：{url}',
+    urlChangeWarn: '這篇文章已發布，改網址會讓指向 {old} 的連結失效。確定要改嗎？',
+    setFeaturedField: '代表圖片寫入的欄位', setFeaturedImages: 'images（Hugo 標準，用於分享預覽）',
+    setFeaturedCover: 'cover.image（PaperMod）', setFeaturedDefault: '文章還沒有代表圖片時',
+    setFeaturedFirst: '第一張拖進來的圖自動設為代表圖片', setFeaturedNone: '維持沒有代表圖片',
     settings: '設定', setName: '圖片命名', setNameSlug: '依文章：{slug}-01、{slug}-02 …（建議）',
     setNameOriginal: '保留原始檔名', setNameCustom: '自訂格式…',
     setNameHint: '{slug} = 文章網址代稱，{n} = 01、02 …，{original} = 上傳檔案的原始檔名',
@@ -806,6 +849,7 @@ function layout() {
   $('imgsize-wrap').hidden = !post?.editable || view === 'preview';
   $('empty').hidden = !!post;
   $('front').hidden = $('wysiwyg').hidden = !post || !post.editable || view !== 'wysiwyg';
+  $('post-info').hidden = !post || !post.editable || view === 'preview';
   $('source').hidden = !post || view !== 'source';
 }
 
@@ -875,6 +919,7 @@ async function openPost(path) {
   showPreview(meta.url);
   layout();
   renderList();
+  renderPostInfo();
   loadImages();
   // Keep the open post in the address, so a reload (or a bookmark) comes back to it.
   const address = new URL(location.href);
@@ -959,6 +1004,8 @@ async function uploadImage(file) {
     status(t('uploading', { name }));
     const width = $('imgsize').value;
     const res = await api('POST', `/api/image?post=${encodeURIComponent(state.current.path)}&name=${encodeURIComponent(name)}&width=${width}`, file, true);
+    // The first image of a post without a featured image becomes it (setting featured_default).
+    if (state.info?.settings.featured_default === 'first' && !state.current.featured) await setFront('featured', res.url);
     // Say what the photo gave away and is now gone, e.g. "removed: location (GPS), camera".
     const removed = (res.removed || []).map(k => t('meta_' + k)).join(LANG === 'zh-TW' ? '、' : ', ');
     status(t('imageSaved', { file: res.file, kb: Math.round(res.bytes / 1024) }) + (removed ? ' · ' + t('removedMeta', { what: removed }) : ''));
@@ -1019,6 +1066,7 @@ function renderImages() {
   const misnamed = images.filter(i => !namedAfterPost(i.name, slug));
   $('rename-all').textContent = t('renameAll', { n: misnamed.length });
   $('rename-all').hidden = !misnamed.length;
+  renderFeatured();
   if (!editable) $('images-panel').hidden = true;
   if (!images.length) {
     const li = document.createElement('li'); li.className = 'empty-list'; li.textContent = t('noImages');
@@ -1223,7 +1271,13 @@ function fillSettings() {
   $('set-format').value = s.image_format === 'jpg' ? 'jpeg' : s.image_format;
   $('set-quality').value = s.image_quality;
   $('set-strip').checked = s.strip_metadata;
+  const fields = ['images', 'cover.image'];
+  $('set-featured-field').value = fields.includes(s.featured_field) ? s.featured_field : 'custom';
+  $('set-featured-custom').value = fields.includes(s.featured_field) ? '' : s.featured_field;
+  $('set-featured-custom').hidden = $('set-featured-field').value !== 'custom';
+  $('set-featured-default').value = s.featured_default;
 }
+$('set-featured-field').onchange = () => { $('set-featured-custom').hidden = $('set-featured-field').value !== 'custom'; };
 $('settings-btn').onclick = () => { fillSettings(); $('set-err').textContent = ''; $('settings-dialog').showModal(); };
 $('set-name').onchange = () => { $('set-name-custom').hidden = $('set-name').value !== 'custom'; };
 $('settings-form').onsubmit = async e => {
@@ -1234,12 +1288,99 @@ $('settings-form').onsubmit = async e => {
     const res = await api('POST', '/api/settings', {
       image_name: name, image_max_width: Number($('set-width').value), image_format: $('set-format').value,
       image_quality: Number($('set-quality').value), strip_metadata: $('set-strip').checked,
+      featured_field: $('set-featured-field').value === 'custom' ? $('set-featured-custom').value.trim() : $('set-featured-field').value,
+      featured_default: $('set-featured-default').value,
     });
+    if (state.current?.editable) await openPost(state.current.path);   // re-read the featured image with the new key
     state.info.settings = res.settings;
     $('imgsize').options[0].textContent = t('sizeOriginal', { max: res.settings.image_max_width });
     $('settings-dialog').close();
     status(t('settingsSaved'));
   } catch (err) { $('set-err').textContent = err.message; }
+};
+
+// -- post info: title, URL, featured image -----------------------------------------
+
+function renderPostInfo() {
+  const post = state.current;
+  if (!post?.editable) return;
+  $('info-title').value = post.front_title ?? post.title ?? '';
+  $('info-url').value = post.front_url || '';
+  $('info-url').placeholder = t('featuredUrlPlaceholder', { url: post.url || '' });
+  renderFeatured();
+}
+
+function renderFeatured() {
+  const post = state.current;
+  if (!post?.editable) return;
+  const current = post.featured || '';
+  const names = state.images.map(i => i.url);
+  if (current && !names.includes(current)) names.push(current);       // e.g. an image elsewhere
+  const none = new Option(t('featuredNone'), '');
+  $('info-featured').replaceChildren(none, ...names.map(u => new Option(u.split('/').pop(), u)));
+  $('info-featured').value = current;
+  $('info-thumb').hidden = !current;
+  if (current) $('info-thumb').src = current;
+}
+
+// Write one post setting to the front matter; the server returns the new text.
+async function setFront(field, value) {
+  if (!state.current?.editable) return;
+  await save();
+  try {
+    const res = await api('POST', '/api/front', { path: state.current.path, field, value });
+    $('front-text').value = split(res.text)[0];
+    if (state.view === 'source') {
+      const ta = $('source'), pos = ta.selectionStart;
+      ta.value = res.text; ta.selectionStart = ta.selectionEnd = Math.min(pos, res.text.length);
+    }
+    state.savedText = currentText();
+    state.current.featured = res.featured;
+    if (field === 'title') state.current.front_title = value;
+    if (field === 'url') state.current.front_url = value;
+    status(t('saved', { time: time() }));
+    return res;
+  } catch (e) {
+    status(e.message, true);
+    renderPostInfo();
+  }
+}
+
+$('info-title').addEventListener('change', async () => {
+  const title = $('info-title').value.trim();
+  if (!title || title === (state.current.front_title ?? state.current.title)) return renderPostInfo();
+  if (await setFront('title', title)) {
+    state.current.title = title;
+    const p = state.posts.find(p => p.path === state.current.path); if (p) p.title = title;
+    $('title').textContent = title;
+    document.title = `${title} · ${state.info?.name || 'hugo-writer'}`;
+    renderList();
+  }
+});
+$('info-url').addEventListener('change', async () => {
+  const post = state.current, url = $('info-url').value.trim();
+  if (url === (post.front_url || '')) return;
+  if (!post.draft && !confirm(t('urlChangeWarn', { old: post.url }))) return renderPostInfo();
+  if (await setFront('url', url)) {
+    await loadPosts();                                   // Hugo works out the new permalink
+    const meta = state.posts.find(p => p.path === post.path);
+    if (meta) {
+      state.current.url = meta.url;
+      document.querySelector('base').href = folderOf(meta.url);
+      showPreview(meta.url);
+      renderPostInfo();
+    }
+  }
+});
+['info-title', 'info-url'].forEach(id => $(id).addEventListener('keydown', e => { if (e.key === 'Enter') e.target.blur(); }));
+$('info-featured').onchange = () => setFront('featured', $('info-featured').value).then(renderFeatured);
+$('info-upload').onclick = () => $('info-file').click();
+$('info-file').onchange = async () => {
+  const file = $('info-file').files[0];
+  $('info-file').value = '';
+  if (!file) return;
+  const res = await uploadImage(file);              // named and cleaned like any upload, not inserted
+  if (res) { await setFront('featured', res.url); await loadImages(); }
 };
 
 // -- new post -----------------------------------------------------------------

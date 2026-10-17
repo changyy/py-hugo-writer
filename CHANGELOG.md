@@ -1,5 +1,12 @@
 # Changelog
 
+## 1.20261017.1114705
+
+- Post info above the editor: title, URL and featured image (none, one of the post's images, or an
+  upload just for it), written to the front matter in YAML, TOML or JSON with the rest kept.
+- Settings `featured_field` (`images` by default, `cover.image` for PaperMod, any key) and
+  `featured_default` (`first`: the first image dropped into a post becomes its featured image).
+
 ## 1.20261017.1103937
 
 - Clicking a link lets you edit its text and URL (filled in with the current ones; Enter or Apply),

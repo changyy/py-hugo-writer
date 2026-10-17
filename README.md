@@ -31,6 +31,7 @@ to your content folder. No server to host, no account, no database — just your
 | 3 | Side-by-side preview while you write | the preview reloads on every save |
 | 4 | Markdown throughout: code fences, tables, lists, links | posts stay plain `.md` files |
 | 5 | Drafts | new posts start as drafts; one checkbox flips `draft` in the front matter |
+| 5a | Title, URL and featured image above the editor | written to the front matter (YAML, TOML or JSON), the rest of it kept |
 | 6 | Drop or paste images (screenshots too) | scaled to 1024 px (or 512 / 256 / 128), re-encoded as WebP, EXIF / GPS removed (and reported), named after the post, saved next to it |
 | 7 | Move and align images in the WYSIWYG view | drag an image elsewhere; click it for Left / Center / Right |
 | 8 | Image panel per post, and an image library for the whole site | thumbnails, which posts use each image, rename to `{slug}-NN`, delete what nothing uses |
@@ -95,7 +96,19 @@ interfere with a `hugo server` you already run), then opens the editor at
   *Side-by-side preview* to keep it next to the WYSIWYG or source view.
 - Untick **Draft** when the post is ready; your next `hugo` build publishes it.
 
-### 3. Images
+### 3. Title, URL and featured image
+
+Above the editor: the post's **title**, its **URL** (the front matter `url`; empty means
+Hugo's permalinks decide — changing it on a published post asks first, since old links
+break) and its **featured image**: none, one of the post's images, or one you upload just
+for that (it is not inserted into the text). By default the first image dropped into a post
+without one becomes it.
+
+The featured image goes to the front matter key in `featured_field`: `images` by default
+(Hugo's own, read by its Open Graph and Twitter templates), `cover.image` for PaperMod, or
+any `key` / `parent.key`.
+
+### 4. Images
 
 Drop or paste an image into either editing view. It is scaled down to
 `image_max_width`, re-encoded (WebP by default), stripped of EXIF, named after the
@@ -194,7 +207,7 @@ image render hook (Hugo 0.148+) so `![](screenshot.webp)` points there:
   useEmbedded = 'fallback'
 ```
 
-### 4. Settings
+### 5. Settings
 
 Optional, in `.hugo-writer.toml` at the site root:
 
@@ -207,6 +220,8 @@ image_format = "webp"                  # or "jpeg", "png"
 image_quality = 82
 image_name = "{slug}-{n}"              # {slug}, {n} (01, 02, …), {original} (the uploaded file's name)
 strip_metadata = true                  # false keeps EXIF (camera, GPS, …) in uploaded images
+featured_field = "images"              # front matter key for the featured image, e.g. "cover.image"
+featured_default = "first"             # "first": the first dropped image becomes it; "none"
 ```
 
 `{year}`, `{month}`, `{day}` and `{slug}` are filled in when the post is created.

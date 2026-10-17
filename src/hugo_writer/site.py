@@ -5,6 +5,7 @@ format (YAML, TOML, JSON) and computes permalinks; this module never has to.
 """
 import csv
 import io
+import json
 import os
 import re
 import subprocess
@@ -46,6 +47,11 @@ class Settings:
     image_name: str = '{slug}-{n}'
     # Remove EXIF / XMP from images (GPS position, camera, time taken, …). False keeps EXIF.
     strip_metadata: bool = True
+    # Front matter key for the post's featured image: "images" is Hugo's own (its Open Graph and
+    # Twitter templates read it), "cover.image" is PaperMod's; a dot means a nested key.
+    featured_field: str = 'images'
+    # A post without a featured image gets the first image dropped into it ("first"), or none.
+    featured_default: str = 'first'
 
     @classmethod
     def load(cls, root: Path) -> 'Settings':
@@ -74,6 +80,10 @@ class Settings:
             raise SiteError('image_quality must be between 1 and 100')
         if 'image_format' in values and values['image_format'].lower() not in ('webp', 'jpeg', 'jpg', 'png'):
             raise SiteError('image_format must be webp, jpeg or png')
+        if 'featured_field' in values:
+            _featured_keys(values['featured_field'])
+        if 'featured_default' in values and values['featured_default'] not in ('first', 'none'):
+            raise SiteError('featured_default must be first or none')
         if 'image_name' in values:
             try:
                 values['image_name'].format(slug='s', n='01', original='o')
@@ -169,6 +179,37 @@ class Site:
 
     def set_draft(self, rel: str, draft: bool) -> str:
         text = set_draft(self.read(rel), draft)
+        self.write(rel, text)
+        return text
+
+    def featured(self, rel: str) -> str | None:
+        return get_featured(self.read(rel), self.settings.featured_field)
+
+    def set_featured(self, rel: str, image: str | None) -> str:
+        """Set (or with None, remove) the post's featured image in its front matter."""
+        return self.set_front(rel, 'featured', image)
+
+    def set_front(self, rel: str, field: str, value: str | None) -> str:
+        """Set one of the post's settings in its front matter: title, url or featured (image).
+
+        An empty url or featured removes the key (Hugo's permalinks / no image); a title can't be empty.
+        """
+        value = (value or '').strip() or None
+        if field == 'title':
+            if not value:
+                raise SiteError('a title is required')
+            key = 'title'
+        elif field == 'url':
+            if value and not value.startswith('/'):
+                value = '/' + value
+            if value and not re.fullmatch(r'/[^\s"\'<>]*', value):
+                raise SiteError('a URL path has no spaces or quotes, e.g. /2026/10/my-post.html')
+            key = 'url'
+        elif field == 'featured':
+            key = self.settings.featured_field
+        else:
+            raise SiteError(f'unknown post setting: {field}')
+        text = set_featured(self.read(rel), key, value)
         self.write(rel, text)
         return text
 
@@ -392,6 +433,191 @@ def replace_links(text: str, old: str, new: str) -> str:
 def quote(value: str) -> str:
     """A double-quoted scalar, valid in both YAML and TOML."""
     return '"' + value.replace('\\', '\\\\').replace('"', '\\"') + '"'
+
+
+# -- featured image in the front matter --------------------------------------------
+# A key like "images" (a list; the first entry counts) or a nested "cover.image" (a value), in
+# YAML, TOML or JSON front matter. YAML and TOML are edited line by line, so the rest of the front
+# matter, comments included, stays as it was.
+
+def _featured_keys(field: str) -> list[str]:
+    keys = [k for k in field.split('.') if k]
+    if not 1 <= len(keys) <= 2 or not all(re.fullmatch(r'[A-Za-z_][\w-]*', k) for k in keys):
+        raise SiteError(f'featured_field must be a key or parent.key, not {field!r}')
+    return keys
+
+
+def _scalar(raw: str) -> str:
+    raw = raw.strip()
+    if raw.startswith('[') and raw.endswith(']'):
+        items = [i.strip() for i in raw[1:-1].split(',') if i.strip()]
+        raw = items[0] if items else ''
+    if len(raw) >= 2 and raw[0] == raw[-1] and raw[0] in '"\'':
+        raw = raw[1:-1]
+    return raw
+
+
+def _yaml_block(lines: list[str], key: str, start: int = 0, end: int | None = None, indent: str = '') -> tuple[int, int] | None:
+    """[first, last) lines of `key:` at this indent and the lines that belong to it."""
+    end = len(lines) if end is None else end
+    head = re.compile(rf'^{re.escape(indent)}{re.escape(key)}\s*:')
+    for i in range(start, end):
+        if head.match(lines[i]):
+            j = i + 1
+            while j < end and lines[j].strip() and (len(lines[j]) - len(lines[j].lstrip()) > len(indent)
+                                                   or (not indent and lines[j].lstrip().startswith('- '))):
+                j += 1
+            return i, j
+    return None
+
+
+def get_featured(text: str, field: str) -> str | None:
+    keys = _featured_keys(field)
+    end = front_matter_end(text)
+    if not end:
+        return None
+    front = text[:end]
+    if front.startswith('{'):
+        value = json.loads(front)
+        for k in keys:
+            value = value.get(k) if isinstance(value, dict) else None
+        value = value[0] if isinstance(value, list) and value else value
+        return value if isinstance(value, str) and value else None
+    m = FRONT_MATTER.match(text)
+    if m.group(1) == '+++':
+        value = tomllib.loads(m.group(2))
+        for k in keys:
+            value = value.get(k) if isinstance(value, dict) else None
+        value = value[0] if isinstance(value, list) and value else value
+        return value if isinstance(value, str) and value else None
+    lines = m.group(2).split('\n')
+    block = _yaml_block(lines, keys[0])
+    if not block:
+        return None
+    if len(keys) == 2:
+        child = _yaml_block(lines, keys[1], block[0] + 1, block[1], indent=_child_indent(lines, block))
+        if not child:
+            return None
+        block = child
+    first, last = block
+    inline = lines[first].split(':', 1)[1].strip()
+    if inline:
+        return _scalar(inline) or None
+    for line in lines[first + 1:last]:
+        if line.strip().startswith('- '):
+            return _scalar(line.strip()[2:]) or None
+    return None
+
+
+def _child_indent(lines, block) -> str:
+    for line in lines[block[0] + 1:block[1]]:
+        if line.strip():
+            return line[:len(line) - len(line.lstrip())]
+    return '  '
+
+
+def set_featured(text: str, field: str, image: str | None) -> str:
+    keys = _featured_keys(field)
+    listy = keys[-1] == 'images'
+    end = front_matter_end(text)
+    if not end:
+        if image is None:
+            return text
+        text = '---\n---\n' + text
+        end = front_matter_end(text)
+    front = text[:end]
+    if front.startswith('{'):
+        data = json.loads(front)
+        target = data
+        for k in keys[:-1]:
+            target = target.setdefault(k, {}) if image is not None else target.get(k, {})
+        if image is None:
+            target.pop(keys[-1], None)
+            if len(keys) == 2 and keys[0] in data and not data[keys[0]]:
+                del data[keys[0]]
+        else:
+            target[keys[-1]] = [image] if listy else image
+        return json.dumps(data, ensure_ascii=False, indent=2) + text[end:]
+    m = FRONT_MATTER.match(text)
+    fence, body = m.group(1), m.group(2)
+    lines = body.split('\n') if body else []
+    value = (f'[{quote(image)}]' if listy else quote(image)) if image is not None else None
+    if fence == '+++':
+        lines = _set_toml(lines, keys, value)
+    else:
+        lines = _set_yaml(lines, keys, value)
+    new_body = '\n'.join(lines)
+    return text[:m.start(2)] + new_body + text[m.end(2):]
+
+
+def _set_yaml(lines, keys, value):
+    block = _yaml_block(lines, keys[0])
+    if len(keys) == 1:
+        if block:
+            del lines[block[0]:block[1]]
+            at = block[0]
+        else:
+            at = len(lines)
+        if value is not None:
+            lines.insert(at, f'{keys[0]}: {value}')
+        return lines
+    if block and lines[block[0]].split(':', 1)[1].strip():
+        raise SiteError(f'{keys[0]} is written inline in the front matter; change it in the source view')
+    if not block:
+        if value is not None:
+            lines += [f'{keys[0]}:', f'  {keys[1]}: {value}']
+        return lines
+    indent = _child_indent(lines, block)
+    child = _yaml_block(lines, keys[1], block[0] + 1, block[1], indent=indent)
+    if child:
+        del lines[child[0]:child[1]]
+    if value is not None:
+        lines.insert(child[0] if child else block[0] + 1, f'{indent}{keys[1]}: {value}')
+    else:
+        rest = _yaml_block(lines, keys[0])
+        if rest and rest[1] - rest[0] == 1:                 # parent left with no children
+            del lines[rest[0]]
+    return lines
+
+
+def _set_toml(lines, keys, value):
+    tables = [i for i, l in enumerate(lines) if re.match(r'^\s*\[', l)]
+    top_end = tables[0] if tables else len(lines)
+    if len(keys) == 1:
+        pattern, section = re.compile(rf'^\s*{re.escape(keys[0])}\s*='), (0, top_end)
+    else:
+        dotted = re.compile(rf'^\s*{re.escape(keys[0])}\.{re.escape(keys[1])}\s*=')
+        hit = next((i for i in range(top_end) if dotted.match(lines[i])), None)
+        if hit is not None:
+            if value is None:
+                del lines[hit]
+            else:
+                lines[hit] = f'{keys[0]}.{keys[1]} = {value}'
+            return lines
+        head = next((i for i in tables if re.match(rf'^\s*\[{re.escape(keys[0])}\]\s*$', lines[i])), None)
+        if head is None:
+            if value is not None:
+                lines += ['', f'[{keys[0]}]', f'{keys[1]} = {value}']
+            return lines
+        stop = next((i for i in tables if i > head), len(lines))
+        pattern, section = re.compile(rf'^\s*{re.escape(keys[1])}\s*='), (head + 1, stop)
+    hit = next((i for i in range(*section) if pattern.match(lines[i])), None)
+    name = keys[-1]
+    if hit is not None:
+        if value is None:
+            del lines[hit]
+        else:
+            lines[hit] = f'{name} = {value}'
+    elif value is not None:
+        lines.insert(section[1], f'{name} = {value}')
+    if len(keys) == 2 and value is None:
+        head = section[0] - 1
+        stop = next((i for i, l in enumerate(lines) if i > head and re.match(r'^\s*\[', l)), len(lines))
+        if not any(l.strip() for l in lines[head + 1:stop]):
+            del lines[head:stop]
+            while lines and not lines[-1].strip():
+                lines.pop()
+    return lines
 
 
 def set_draft(text: str, draft: bool) -> str:

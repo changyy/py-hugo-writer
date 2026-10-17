@@ -177,3 +177,14 @@ def test_renaming_twice_is_an_error_not_a_crash(app):
     assert status == 400 and 'no such image' in json.loads(data)['error']
     file = json.dumps({'file': 'content/posts/2024/05/hello-markdown/chosen.webp', 'new_name': ''})
     assert json.loads(request(app, 'POST', '/api/image/rename', file, WRITE)[2])['name'] == 'hello-markdown-01.webp'
+
+
+def test_featured_api(app):
+    _, _, data = request(app, 'GET', f'/api/post?path={BUNDLE}')
+    assert json.loads(data)['featured'] is None
+    status, _, data = request(app, 'POST', '/api/featured', json.dumps({'path': BUNDLE, 'image': 'sample.webp'}), WRITE)
+    res = json.loads(data)
+    assert status == 200 and res['featured'] == 'sample.webp' and 'images: ["sample.webp"]' in res['text']
+    _, _, data = request(app, 'POST', '/api/featured', json.dumps({'path': BUNDLE, 'image': None}), WRITE)
+    assert json.loads(data)['featured'] is None and 'images:' not in app.site.read(BUNDLE)
+    assert request(app, 'POST', '/api/settings', json.dumps({'featured_field': 'a.b.c'}), WRITE)[0] == 400

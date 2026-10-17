@@ -11,7 +11,7 @@ from urllib.parse import parse_qs, urlsplit
 
 from . import images
 from ._version import __version__
-from .site import SiteError, atomic_write, has_raw_html
+from .site import SiteError, atomic_write, get_featured, has_raw_html
 
 # Every request that changes files must carry this header. A web page on another
 # origin can't add a custom header without a CORS preflight, which we never grant,
@@ -159,7 +159,26 @@ class Handler(BaseHTTPRequestHandler):
         site = self.server.site
         text = site.read(rel)
         editable = site.resolve(rel).suffix.lower() in ('.md', '.markdown')
-        self._json({'path': rel, 'text': text, 'editable': editable, 'has_html': editable and has_raw_html(text)})
+        front = {}
+        for name, key in (('featured', site.settings.featured_field), ('front_title', 'title'), ('front_url', 'url')):
+            try:
+                front[name] = get_featured(text, key) if editable else None
+            except (SiteError, ValueError):
+                front[name] = None
+        self._json({'path': rel, 'text': text, 'editable': editable, 'has_html': editable and has_raw_html(text),
+                    **front})
+
+    def set_featured(self):
+        data, site = json.loads(self._body()), self.server.site
+        text = site.set_featured(data.get('path', ''), data.get('image') or None)
+        self._json({'text': text, 'featured': site.featured(data.get('path', ''))})
+
+    def set_front(self):
+        # {path, field: title | url | featured, value}
+        data, site = json.loads(self._body()), self.server.site
+        rel = data.get('path', '')
+        text = site.set_front(rel, data.get('field', ''), data.get('value'))
+        self._json({'text': text, 'featured': site.featured(rel)})
 
     def save_post(self):
         data = json.loads(self._body())
@@ -227,5 +246,6 @@ GET_ROUTES = {'/': Handler.index, '/api/info': Handler.info, '/api/posts': Handl
               '/api/post': Handler.get_post, '/api/images': Handler.list_images, '/api/library': Handler.library}
 POST_ROUTES = {'/api/post': Handler.create_post, '/api/draft': Handler.draft, '/api/image': Handler.upload_image,
                '/api/image/delete': Handler.delete_image, '/api/image/rename': Handler.rename_image,
-               '/api/library/delete': Handler.library_delete, '/api/settings': Handler.save_settings}
+               '/api/library/delete': Handler.library_delete, '/api/settings': Handler.save_settings,
+               '/api/featured': Handler.set_featured, '/api/front': Handler.set_front}
 PUT_ROUTES = {'/api/post': Handler.save_post}

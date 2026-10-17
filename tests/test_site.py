@@ -222,3 +222,58 @@ def test_rename_a_static_image(site):
     result = site.rename_file('static/images/posts/2024/06/a-draft/Shot 1.png')
     assert result['name'] == 'a-draft-01.png' and result['updated'] == [DRAFT]
     assert '/images/posts/2024/06/a-draft/a-draft-01.png' in site.read(DRAFT)
+
+
+@pytest.mark.parametrize('text, field, image, after', [
+    # YAML, Hugo's "images"
+    ('---\ntitle: x\n---\nbody', 'images', 'a.webp', '---\ntitle: x\nimages: ["a.webp"]\n---\nbody'),
+    ('---\ntitle: x\nimages:\n  - old.png\n  - two.png\ntags: []\n---\nb', 'images', 'a.webp', '---\ntitle: x\nimages: ["a.webp"]\ntags: []\n---\nb'),
+    ('---\ntitle: x\nimages: ["a.webp"]\n---\nb', 'images', None, '---\ntitle: x\n---\nb'),
+    # YAML, PaperMod's nested "cover.image", other cover keys kept
+    ('---\ntitle: x\n---\nb', 'cover.image', 'a.webp', '---\ntitle: x\ncover:\n  image: "a.webp"\n---\nb'),
+    ('---\ncover:\n    alt: hi\n    image: old.png\n# note\n---\nb', 'cover.image', 'a.webp', '---\ncover:\n    alt: hi\n    image: "a.webp"\n# note\n---\nb'),
+    ('---\ntitle: x\ncover:\n  image: "a.webp"\n---\nb', 'cover.image', None, '---\ntitle: x\n---\nb'),
+    ('---\ncover:\n  image: a.webp\n  alt: hi\n---\nb', 'cover.image', None, '---\ncover:\n  alt: hi\n---\nb'),
+    # TOML
+    ('+++\ntitle = "x"\n+++\nb', 'images', 'a.webp', '+++\ntitle = "x"\nimages = ["a.webp"]\n+++\nb'),
+    ('+++\ntitle = "x"\n[cover]\nalt = "hi"\n+++\nb', 'cover.image', 'a.webp', '+++\ntitle = "x"\n[cover]\nalt = "hi"\nimage = "a.webp"\n+++\nb'),
+    ('+++\ntitle = "x"\n\n[cover]\nimage = "a.webp"\n+++\nb', 'cover.image', None, '+++\ntitle = "x"\n+++\nb'),
+])
+def test_set_featured(text, field, image, after):
+    from hugo_writer.site import set_featured, get_featured
+    assert set_featured(text, field, image) == after
+    assert get_featured(after, field) == image
+
+
+def test_featured_in_json_and_reading_lists():
+    from hugo_writer.site import set_featured, get_featured
+    text = '{\n  "title": "x"\n}\n\nbody'
+    out = set_featured(text, 'cover.image', 'a.webp')
+    assert get_featured(out, 'cover.image') == 'a.webp' and out.endswith('\n\nbody')
+    assert get_featured(set_featured(out, 'cover.image', None), 'cover.image') is None
+    assert get_featured('---\nimages:\n- first.png\n- second.png\n---\n', 'images') == 'first.png'
+    with pytest.raises(SiteError):
+        set_featured('---\ncover: {image: a}\n---\n', 'cover.image', 'b.webp')
+    with pytest.raises(SiteError):
+        set_featured('---\n---\n', 'a.b.c', 'x')
+
+
+def test_site_featured_uses_the_setting(site_dir):
+    site = Site(site_dir, HUGO)
+    site.settings = site.settings.save(site.root, {'featured_field': 'cover.image'})
+    text = site.set_featured(BUNDLE, 'sample.webp')
+    assert 'cover:\n  image: "sample.webp"' in text and site.featured(BUNDLE) == 'sample.webp'
+    assert 'title: "Hello, Markdown"' in text                     # the rest is untouched
+
+
+def test_set_front_title_url_featured(site):
+    text = site.set_front(BUNDLE, 'title', 'New "title"')
+    assert 'title: "New \\"title\\""' in text and site.read(BUNDLE).count('title:') == 1
+    assert 'url: "/2024/05/moved.html"' in site.set_front(BUNDLE, 'url', '2024/05/moved.html')
+    assert 'url:' not in site.set_front(BUNDLE, 'url', '')
+    assert 'images: ["sample.webp"]' in site.set_front(BUNDLE, 'featured', 'sample.webp')
+    for field, bad in (('title', '  '), ('url', '/has space'), ('colour', 'red')):
+        with pytest.raises(SiteError):
+            site.set_front(BUNDLE, field, bad)
+    with pytest.raises(SiteError):
+        site.settings.save(site.root, {'featured_default': 'sometimes'})
