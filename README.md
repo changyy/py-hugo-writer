@@ -128,14 +128,19 @@ image — by file name or by its published URL — is updated.
 
 In the WYSIWYG view, drag an image to move it: dropped at the start or end of a
 paragraph it becomes a paragraph of its own, dropped inside text it goes into the text.
-Click an image for **Left / Center / Right / Default**. Markdown has no alignment
-syntax, so it is kept in the URL fragment, `![](photo.webp#right)`, and the site's CSS
-does the rest:
+Click an image for **Left / Center / Right / Default** and a display width, **Full size /
+Large 512 / Medium 256 / Small 128** (the file stays as it is, so it is sharp on high-density
+screens and can go back to full size). Markdown has no syntax for either, so they are kept
+in the URL fragment — `![](photo.webp#right)`, `![](photo.webp#w256)`,
+`![](photo.webp#right-w256)` — and the site's CSS does the rest:
 
 ```css
-img[src$="#left"]   { display: block; margin: 0 auto 0 0; }
-img[src$="#center"] { display: block; margin: 0 auto; }
-img[src$="#right"]  { display: block; margin: 0 0 0 auto; }
+img[src*="#left"]   { display: block; margin: 0 auto 0 0; }
+img[src*="#center"] { display: block; margin: 0 auto; }
+img[src*="#right"]  { display: block; margin: 0 0 0 auto; }
+img[src*="#"][src$="w512"] { width: 512px; }
+img[src*="#"][src$="w256"] { width: 256px; }
+img[src*="#"][src$="w128"] { width: 128px; }
 ```
 
 #### The image library

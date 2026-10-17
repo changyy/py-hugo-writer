@@ -99,9 +99,13 @@ main { display: flex; flex-direction: column; min-width: 0; min-height: 0; }
 #wysiwyg { flex: 1; min-height: 0; }
 #wysiwyg .toastui-editor-defaultUI { border: 0; border-radius: 0; }
 /* Image alignment is kept in the URL fragment (#left / #center / #right); show it while editing. */
-#wysiwyg .toastui-editor-contents img[src$="#left"] { display: block; margin: 0 auto 0 0; }
-#wysiwyg .toastui-editor-contents img[src$="#center"] { display: block; margin: 0 auto; }
-#wysiwyg .toastui-editor-contents img[src$="#right"] { display: block; margin: 0 0 0 auto; }
+/* …and its display width: #w512 / #w256 / #w128, after the alignment if both: #right-w256. */
+#wysiwyg .toastui-editor-contents img[src*="#left"] { display: block; margin: 0 auto 0 0; }
+#wysiwyg .toastui-editor-contents img[src*="#center"] { display: block; margin: 0 auto; }
+#wysiwyg .toastui-editor-contents img[src*="#right"] { display: block; margin: 0 0 0 auto; }
+#wysiwyg .toastui-editor-contents img[src*="#"][src$="w512"] { width: 512px; }
+#wysiwyg .toastui-editor-contents img[src*="#"][src$="w256"] { width: 256px; }
+#wysiwyg .toastui-editor-contents img[src*="#"][src$="w128"] { width: 128px; }
 #wysiwyg .toastui-editor-contents img { cursor: grab; max-width: 100%; height: auto; }
 #wysiwyg .toastui-editor-contents img.ProseMirror-selectednode { outline: 2px solid var(--accent); }
 #images-panel { position: fixed; z-index: 30; top: 49px; right: 0; bottom: 0; width: min(340px, 90vw); display: flex; flex-direction: column;
@@ -121,6 +125,7 @@ main { display: flex; flex-direction: column; min-width: 0; min-height: 0; }
 #img-tools { position: fixed; z-index: 40; display: flex; gap: 2px; padding: 3px; border: 1px solid var(--border);
   border-radius: 7px; background: var(--panel); box-shadow: 0 2px 8px rgb(0 0 0 / .15); }
 #img-tools button { padding: 3px 8px; font-size: 12px; }
+#img-tools .sep { width: 1px; margin: 2px 4px; background: var(--border); }
 #img-tools button[aria-pressed=true] { background: var(--accent); color: var(--accent-text); border-color: var(--accent); }
 #source { flex: 1; width: 100%; resize: none; border: 0; outline: none; padding: 16px 20px; background: var(--panel); color: var(--text);
   font: 13px/1.6 var(--mono); tab-size: 4; }
@@ -226,6 +231,11 @@ dialog .actions { display: flex; justify-content: flex-end; gap: 8px; }
   <button data-align="center" data-i18n="alignCenter"></button>
   <button data-align="right" data-i18n="alignRight"></button>
   <button data-align="" data-i18n="alignDefault"></button>
+  <span class="sep"></span>
+  <button data-size="" data-i18n="showFull"></button>
+  <button data-size="w512" data-i18n="show512"></button>
+  <button data-size="w256" data-i18n="show256"></button>
+  <button data-size="w128" data-i18n="show128"></button>
 </div>
 
 <dialog id="settings-dialog">
@@ -291,6 +301,7 @@ const I18N = {
     confirmDelete: 'Delete {name}?', confirmDeleteUsed: '{name} is used in this post and would show as a broken image. Delete anyway?',
     confirmDeleteUnused: 'Delete {n} unused image(s)?\n\n{names}', deleted: 'Deleted {n} image(s)',
     alignLeft: 'Left', alignCenter: 'Center', alignRight: 'Right', alignDefault: 'Default',
+    showFull: 'Full size', show512: 'Large 512', show256: 'Medium 256', show128: 'Small 128',
     imageSize: 'Images:', sizeOriginal: 'Original (max {max})', sizeLarge: 'Large 512', sizeMedium: 'Medium 256', sizeSmall: 'Small 128',
     open: 'Open ↗', noPreview: 'No preview', frontMatter: 'Front matter',
     empty: 'Pick a post on the left, or create a new one.<br>Switch between WYSIWYG, the source file and the Hugo preview at the top right.<br>Drop or paste images; they are resized and saved next to the post.',
@@ -327,6 +338,7 @@ const I18N = {
     confirmDelete: '刪除 {name}？', confirmDeleteUsed: '{name} 正在這篇文章裡使用，刪除後會變成破圖。確定要刪除嗎？',
     confirmDeleteUnused: '刪除 {n} 張未使用的圖片？\n\n{names}', deleted: '已刪除 {n} 張圖片',
     alignLeft: '靠左', alignCenter: '置中', alignRight: '靠右', alignDefault: '預設',
+    showFull: '原始', show512: '大 512', show256: '中 256', show128: '小 128',
     imageSize: '圖片：', sizeOriginal: '原始（最寬 {max}）', sizeLarge: '大 512', sizeMedium: '中 256', sizeSmall: '小 128',
     open: '開新分頁 ↗', noPreview: '沒有預覽', frontMatter: '文章設定（front matter）',
     empty: '從左側挑一篇文章，或新增一篇。<br>右上角可切換：所見即所得、原始檔、Hugo 預覽。<br>拖拉或貼上圖片，會自動縮小並存在文章旁邊。',
@@ -461,8 +473,18 @@ function letImagesDrag(target) {
 }
 ['mousedown', 'dragstart'].forEach(type => $('wysiwyg').addEventListener(type, e => letImagesDrag(e.target), true));
 
-const ALIGN = /#(left|center|right)$/;
-let toolsFor = null;   // { pos, dom } of the image the alignment tools belong to
+// Alignment and display width live in the URL fragment: #right, #w256, #right-w256.
+const LOOK = /#((?:left|center|right)(?:-w(?:512|256|128))?|w(?:512|256|128))$/;
+function imageLook(url) {
+  const m = url.match(LOOK), parts = m ? m[1].split('-') : [];
+  return { base: m ? url.slice(0, m.index) : url,
+           align: parts.find(p => !p.startsWith('w')) || '', size: parts.find(p => p.startsWith('w')) || '' };
+}
+function withLook({ base, align, size }) {
+  const fragment = [align, size].filter(Boolean).join('-');
+  return base + (fragment ? '#' + fragment : '');
+}
+let toolsFor = null;   // { pos, dom } of the image the tools belong to
 
 function imageAt(dom) {
   // The image node's position in the document, found from its <img>.
@@ -477,8 +499,9 @@ function showImageTools(dom) {
   const found = imageAt(dom);
   if (!found) return hideImageTools();
   toolsFor = { pos: found.pos, dom };
-  const align = (found.node.attrs.imageUrl.match(ALIGN) || [])[1] || '';
-  document.querySelectorAll('#img-tools button').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.align === align)));
+  const look = imageLook(found.node.attrs.imageUrl);
+  document.querySelectorAll('#img-tools button').forEach(b => b.setAttribute('aria-pressed',
+    String('align' in b.dataset ? b.dataset.align === look.align : b.dataset.size === look.size)));
   const box = dom.getBoundingClientRect(), tools = $('img-tools');
   tools.hidden = false;
   tools.style.top = Math.max(8, box.top - tools.offsetHeight - 6) + 'px';
@@ -486,10 +509,10 @@ function showImageTools(dom) {
 }
 function hideImageTools() { $('img-tools').hidden = true; toolsFor = null; }
 
-function alignImage(align) {
+function setImageLook(change) {
   const found = toolsFor && imageAt(toolsFor.dom);
   if (!found) return hideImageTools();
-  const url = found.node.attrs.imageUrl.replace(ALIGN, '') + (align ? '#' + align : '');
+  const url = withLook({ ...imageLook(found.node.attrs.imageUrl), ...change });
   pm.dispatch(pm.state.tr.setNodeMarkup(found.pos, undefined, { ...found.node.attrs, imageUrl: url }));
   hideImageTools();
 }
@@ -556,7 +579,10 @@ $('wysiwyg').addEventListener('drop', e => {
 pm.dom.addEventListener('click', e => { e.target.tagName === 'IMG' ? showImageTools(e.target) : hideImageTools(); });
 pm.dom.addEventListener('dragstart', hideImageTools);
 $('wysiwyg').addEventListener('scroll', hideImageTools, true);
-document.querySelectorAll('#img-tools button').forEach(b => { b.onmousedown = e => e.preventDefault(); b.onclick = () => alignImage(b.dataset.align); });
+document.querySelectorAll('#img-tools button').forEach(b => {
+  b.onmousedown = e => e.preventDefault();
+  b.onclick = () => setImageLook('align' in b.dataset ? { align: b.dataset.align } : { size: b.dataset.size });
+});
 
 function setEditorBody(body) {
   state.loading = true;

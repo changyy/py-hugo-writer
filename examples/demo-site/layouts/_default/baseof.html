@@ -3,10 +3,14 @@
 <head><meta charset="utf-8"><title>{{ .Title }} · {{ site.Title }}</title>
 <style>
   img { max-width: 100%; height: auto; }
-  /* Image alignment set in hugo-writer is kept in the URL fragment: ![](x.webp#right) */
-  img[src$="#left"] { display: block; margin: 0 auto 0 0; }
-  img[src$="#center"] { display: block; margin: 0 auto; }
-  img[src$="#right"] { display: block; margin: 0 0 0 auto; }
+  /* Image alignment and width set in hugo-writer are kept in the URL fragment:
+     ![](x.webp#right), ![](x.webp#w256), ![](x.webp#right-w256) */
+  img[src*="#left"] { display: block; margin: 0 auto 0 0; }
+  img[src*="#center"] { display: block; margin: 0 auto; }
+  img[src*="#right"] { display: block; margin: 0 0 0 auto; }
+  img[src*="#"][src$="w512"] { width: 512px; }
+  img[src*="#"][src$="w256"] { width: 256px; }
+  img[src*="#"][src$="w128"] { width: 128px; }
 </style></head>
 <body><main>{{ block "main" . }}{{ end }}</main></body>
 </html>

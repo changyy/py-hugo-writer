@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.20261017.1102721
+
+- Click an image for a display width too: Full size / Large 512 / Medium 256 / Small 128, kept with the
+  alignment in the URL fragment (`#w256`, `#right-w256`); the file is not resized. Site CSS: see README.
+
 ## 1.20261017.1102445
 
 - Rename any image to a name you type (URL-safe, extension kept), or leave it empty for `{slug}-NN`,
