@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.20261017.1103937
+
+- Clicking a link lets you edit its text and URL (filled in with the current ones; Enter or Apply),
+  remove the link while keeping the text, or open it. Its target / rel and other text marks stay.
+
 ## 1.20261017.1103544
 
 - Click a link for "Open in a new tab" and rel (nofollow, sponsored, ugc, noopener, noreferrer); such

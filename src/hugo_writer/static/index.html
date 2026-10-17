@@ -129,7 +129,10 @@ main { display: flex; flex-direction: column; min-width: 0; min-height: 0; }
 #link-tools { position: fixed; z-index: 40; display: flex; flex-wrap: wrap; align-items: center; gap: 4px 10px; max-width: 640px;
   padding: 6px 10px; border: 1px solid var(--border); border-radius: 7px; background: var(--panel); box-shadow: 0 2px 8px rgb(0 0 0 / .15); font-size: 12px; }
 #link-tools label { display: inline-flex; align-items: center; gap: 3px; white-space: nowrap; }
-#link-tools .url { flex-basis: 100%; color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+#link-tools .fields { flex-basis: 100%; display: grid; grid-template-columns: auto 1fr; gap: 4px 6px; align-items: center; }
+#link-tools .fields input { width: 100%; font-size: 12px; padding: 3px 6px; }
+#link-tools .buttons { flex-basis: 100%; display: flex; gap: 6px; justify-content: flex-end; }
+#link-tools .buttons button, #link-tools .buttons a { font-size: 12px; padding: 3px 8px; }
 #link-tools .sep { width: 1px; align-self: stretch; background: var(--border); }
 #img-tools button[aria-pressed=true] { background: var(--accent); color: var(--accent-text); border-color: var(--accent); }
 #source { flex: 1; width: 100%; resize: none; border: 0; outline: none; padding: 16px 20px; background: var(--panel); color: var(--text);
@@ -244,7 +247,10 @@ dialog .actions { display: flex; justify-content: flex-end; gap: 8px; }
 </div>
 
 <div id="link-tools" hidden role="toolbar">
-  <span class="url" id="link-url"></span>
+  <div class="fields">
+    <span data-i18n="linkText"></span><input type="text" id="link-text" autocomplete="off">
+    <span data-i18n="linkUrl"></span><input type="text" id="link-href" autocomplete="off" spellcheck="false">
+  </div>
   <label><input type="checkbox" data-target="_blank"> <span data-i18n="linkNewTab"></span></label>
   <span class="sep"></span>
   <span>rel:</span>
@@ -253,6 +259,11 @@ dialog .actions { display: flex; justify-content: flex-end; gap: 8px; }
   <label><input type="checkbox" data-rel="ugc"> ugc</label>
   <label><input type="checkbox" data-rel="noopener"> noopener</label>
   <label><input type="checkbox" data-rel="noreferrer"> noreferrer</label>
+  <div class="buttons">
+    <a id="link-open" target="_blank" rel="noopener" data-i18n="linkOpen"></a>
+    <button id="link-remove" data-i18n="linkRemove"></button>
+    <button id="link-apply" class="primary" data-i18n="linkApply"></button>
+  </div>
 </div>
 
 <dialog id="settings-dialog">
@@ -318,7 +329,7 @@ const I18N = {
     confirmDelete: 'Delete {name}?', confirmDeleteUsed: '{name} is used in this post and would show as a broken image. Delete anyway?',
     confirmDeleteUnused: 'Delete {n} unused image(s)?\n\n{names}', deleted: 'Deleted {n} image(s)',
     alignLeft: 'Left', alignCenter: 'Center', alignRight: 'Right', alignDefault: 'Default',
-    linkNewTab: 'Open in a new tab',
+    linkNewTab: 'Open in a new tab', linkText: 'Text', linkUrl: 'URL', linkApply: 'Apply', linkRemove: 'Remove link', linkOpen: 'Open ↗',
     showFull: 'Full size', show512: 'Large 512', show256: 'Medium 256', show128: 'Small 128',
     imageSize: 'Images:', sizeOriginal: 'Original (max {max})', sizeLarge: 'Large 512', sizeMedium: 'Medium 256', sizeSmall: 'Small 128',
     open: 'Open ↗', noPreview: 'No preview', frontMatter: 'Front matter',
@@ -356,7 +367,7 @@ const I18N = {
     confirmDelete: '刪除 {name}？', confirmDeleteUsed: '{name} 正在這篇文章裡使用，刪除後會變成破圖。確定要刪除嗎？',
     confirmDeleteUnused: '刪除 {n} 張未使用的圖片？\n\n{names}', deleted: '已刪除 {n} 張圖片',
     alignLeft: '靠左', alignCenter: '置中', alignRight: '靠右', alignDefault: '預設',
-    linkNewTab: '開新分頁',
+    linkNewTab: '開新分頁', linkText: '文字', linkUrl: '網址', linkApply: '套用', linkRemove: '移除連結', linkOpen: '開啟 ↗',
     showFull: '原始', show512: '大 512', show256: '中 256', show128: '小 128',
     imageSize: '圖片：', sizeOriginal: '原始（最寬 {max}）', sizeLarge: '大 512', sizeMedium: '中 256', sizeSmall: '小 128',
     open: '開新分頁 ↗', noPreview: '沒有預覽', frontMatter: '文章設定（front matter）',
@@ -647,7 +658,9 @@ function showLinkTools(a) {
   if (!range) return hideLinkTools();
   linkFor = range;
   const attrs = range.mark.attrs.htmlAttrs || {}, rel = (attrs.rel || '').split(/\s+/);
-  $('link-url').textContent = range.mark.attrs.linkUrl;
+  $('link-text').value = pm.state.doc.textBetween(range.from, range.to);
+  $('link-href').value = range.mark.attrs.linkUrl;
+  $('link-open').href = range.mark.attrs.linkUrl;
   document.querySelectorAll('#link-tools input[data-target]').forEach(i => { i.checked = attrs.target === i.dataset.target; });
   document.querySelectorAll('#link-tools input[data-rel]').forEach(i => { i.checked = rel.includes(i.dataset.rel); });
   const box = a.getBoundingClientRect(), tools = $('link-tools');
@@ -670,7 +683,42 @@ function applyLinkTools() {
   linkFor = { ...current, mark };
 }
 
-document.querySelectorAll('#link-tools input').forEach(i => { i.onchange = applyLinkTools; });
+// Change the link's text and URL (its target / rel and the text's other marks stay).
+function editLink() {
+  if (!linkFor) return;
+  const current = linkRangeAt(linkFor.from + 1) || linkFor;
+  const text = $('link-text').value, href = $('link-href').value.trim();
+  if (!href) return removeLink();
+  const mark = current.mark.type.create({ ...current.mark.attrs, linkUrl: href });
+  const tr = pm.state.tr;
+  if (text && text !== pm.state.doc.textBetween(current.from, current.to)) {
+    const others = pm.state.doc.nodeAt(current.from).marks.filter(m => m.type !== mark.type);
+    tr.replaceWith(current.from, current.to, pm.state.schema.text(text, [...others, mark]));
+  } else {
+    tr.removeMark(current.from, current.to, mark.type).addMark(current.from, current.to, mark);
+  }
+  pm.dispatch(tr);
+  hideLinkTools();
+  pm.focus();
+}
+
+// Keep the text, drop the link.
+function removeLink() {
+  if (!linkFor) return;
+  const current = linkRangeAt(linkFor.from + 1) || linkFor;
+  pm.dispatch(pm.state.tr.removeMark(current.from, current.to, current.mark.type));
+  hideLinkTools();
+  pm.focus();
+}
+
+document.querySelectorAll('#link-tools input[type=checkbox]').forEach(i => { i.onchange = applyLinkTools; });
+$('link-apply').onclick = editLink;
+$('link-remove').onclick = removeLink;
+['link-text', 'link-href'].forEach(id => $(id).addEventListener('keydown', e => {
+  if (e.key === 'Enter') { e.preventDefault(); editLink(); }
+  if (e.key === 'Escape') { hideLinkTools(); pm.focus(); }
+}));
+$('link-href').addEventListener('input', () => { $('link-open').href = $('link-href').value.trim(); });
 pm.dom.addEventListener('click', e => {
   const a = e.target.closest && e.target.closest('a');
   a && pm.dom.contains(a) ? showLinkTools(a) : hideLinkTools();

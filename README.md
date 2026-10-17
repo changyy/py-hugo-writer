@@ -146,7 +146,8 @@ img[src*="#"][src$="w128"] { width: 128px; }
 
 #### Links: new tab and rel
 
-Click a link in the WYSIWYG view to set **Open in a new tab** and `rel` (nofollow,
+Click a link in the WYSIWYG view to edit its text and URL (filled in with the current ones),
+remove the link (the text stays), or set **Open in a new tab** and `rel` (nofollow,
 sponsored, ugc, noopener, noreferrer). Markdown links can't hold these, so a link with any
 of them is written as HTML, `<a href="…" target="_blank" rel="nofollow">…</a>`, and goes
 back to `[text](url)` when they are all cleared. The site must let raw HTML through
