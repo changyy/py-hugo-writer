@@ -53,12 +53,52 @@ def test_nothing_reported_for_a_clean_image():
     assert process(png(10, 10), 'a.png', 1024, 'webp', 80)[2] == []
 
 
-def test_animated_gifs_pass_through():
+def animated_gif(comment=b''):
     frames = [Image.new('RGB', (10, 10), (i * 100, 0, 0)).convert('P') for i in range(3)]
     out = io.BytesIO()
-    frames[0].save(out, 'GIF', save_all=True, append_images=frames[1:])
-    data, ext, _ = process(out.getvalue(), 'a.gif', 5, 'webp', 80)
-    assert data == out.getvalue() and ext == '.gif'
+    frames[0].save(out, 'GIF', save_all=True, append_images=frames[1:], duration=120, loop=0, comment=comment)
+    return out.getvalue()
+
+
+def test_animated_gifs_stay_animated_but_lose_their_comment():
+    data, ext, removed = process(animated_gif(b'made by Jane on her laptop'), 'a.gif', 5, 'webp', 80)
+    img = Image.open(io.BytesIO(data))
+    assert ext == '.gif' and img.is_animated and img.n_frames == 3 and img.size == (10, 10)
+    assert 'comment' not in img.info and removed == ['comment']
+
+
+def test_animated_gifs_untouched_when_keeping_metadata():
+    original = animated_gif(b'note')
+    assert process(original, 'a.gif', 5, 'webp', 80, strip=False)[0] == original
+
+
+INKSCAPE_SVG = b"""<?xml version="1.0" encoding="UTF-8"?>
+<!-- Created with Inkscape -->
+<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink"
+     xmlns:inkscape="http://www.inkscape.org/namespaces/inkscape"
+     xmlns:sodipodi="http://sodipodi.sourceforge.net/DTD/sodipodi-0.dtd"
+     xmlns:dc="http://purl.org/dc/elements/1.1/" xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#"
+     width="10" height="10" sodipodi:docname="secret-plan.svg"
+     inkscape:export-filename="/Users/jane/Desktop/secret-plan.png" onload="alert(1)">
+  <metadata><rdf:RDF><dc:creator>Jane Doe</dc:creator></rdf:RDF></metadata>
+  <sodipodi:namedview id="base" inkscape:window-width="1440"/>
+  <script>alert('x')</script>
+  <a xlink:href="javascript:alert(2)"><rect width="10" height="10" fill="#0a66c2" inkscape:label="box"/></a>
+</svg>"""
+
+
+def test_svgs_lose_editor_paths_author_and_scripts():
+    data, ext, removed = process(INKSCAPE_SVG, 'plan.svg', 1024, 'webp', 80)
+    text = data.decode()
+    assert ext == '.svg' and removed == ['metadata', 'script']
+    for gone in ('/Users/jane', 'secret-plan', 'Jane Doe', 'Inkscape', 'namedview', 'alert', 'onload', 'inkscape:'):
+        assert gone not in text, gone
+    assert '<rect' in text and 'fill="#0a66c2"' in text and text.count('<svg') == 1 and 'ns0:' not in text
+
+
+def test_svg_scripts_go_even_when_keeping_metadata():
+    data, _, removed = process(INKSCAPE_SVG, 'plan.svg', 1024, 'webp', 80, strip=False)
+    assert 'alert' not in data.decode() and 'script' in removed
 
 
 def test_non_images_are_rejected():

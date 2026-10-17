@@ -143,3 +143,57 @@ def test_images_lists_and_deletes_only_image_files(site):
             site.delete_image(BUNDLE, bad)
     site.delete_image(BUNDLE, 'sample.webp')
     assert site.images(BUNDLE) == [] and site.read(BUNDLE)   # the post itself is untouched
+
+
+def test_links_to_and_replace_links():
+    from hugo_writer.site import links_to, replace_links
+    text = '![](a.webp) ![](a.webp#right) ![](/other/a.webp) ![](ba.webp) ![](a.webp2)'
+    assert links_to(text, 'a.webp') and links_to(text, '/other/a.webp') and not links_to('![](/x/a.webp)', 'a.webp')
+    assert replace_links(text, 'a.webp', 'p-01.webp') == \
+        '![](p-01.webp) ![](p-01.webp#right) ![](/other/a.webp) ![](ba.webp) ![](a.webp2)'
+
+
+@needs_hugo
+def test_library_finds_images_and_who_uses_them(site):
+    other = site.create('Other', 'other', now=NOW)
+    site.write(other, site.read(other) + '\n![](/2024/05/hello-markdown/sample.webp#right)\n')
+    (site.root / 'content/posts/2024/05/hello-markdown/unused.png').write_bytes(b'x')
+    lib = {i['name']: i for i in site.library()}
+    sample = lib['sample.webp']
+    assert sample['url'] == '/2024/05/hello-markdown/sample.webp'
+    assert sample['owner']['path'] == BUNDLE
+    assert sorted(r['path'] for r in sample['refs']) == sorted([BUNDLE, other])
+    assert lib['unused.png']['refs'] == []
+    assert [i['name'] for i in site.library(only_post=BUNDLE)] == ['sample.webp', 'unused.png']
+
+
+@needs_hugo
+def test_rename_image_updates_every_post(site):
+    other = site.create('Other', 'other', now=NOW)
+    site.write(other, site.read(other) + '\n![](/2024/05/hello-markdown/sample.webp#right)\n')
+    result = site.rename_image(BUNDLE, 'sample.webp')
+    assert result['name'] == 'hello-markdown-01.webp' and sorted(result['updated']) == sorted([BUNDLE, other])
+    assert '![](hello-markdown-01.webp)' in site.read(BUNDLE)
+    assert '![](/2024/05/hello-markdown/hello-markdown-01.webp#right)' in site.read(other)
+    assert (site.root / 'content/posts/2024/05/hello-markdown/hello-markdown-01.webp').is_file()
+
+
+@needs_hugo
+def test_delete_file_stays_inside_images(site):
+    for bad in ('hugo.toml', BUNDLE, '../x.png', 'content/posts/2024/05/hello-markdown/missing.webp'):
+        with pytest.raises(SiteError):
+            site.delete_file(bad)
+    site.delete_file('content/posts/2024/05/hello-markdown/sample.webp')
+    assert site.library() == []
+
+
+def test_settings_save_keeps_comments_and_validates(site_dir):
+    site = Site(site_dir, HUGO)
+    site.settings = site.settings.save(site.root, {'image_max_width': '800', 'strip_metadata': False, 'image_name': '{original}'})
+    text = (site_dir / '.hugo-writer.toml').read_text()
+    assert text.startswith('# New posts get a Blogger-style URL')          # comment kept
+    assert 'image_max_width = 800' in text and 'strip_metadata = false' in text and 'image_name = "{original}"' in text
+    assert site.settings.image_max_width == 800 and site.settings.strip_metadata is False
+    for bad in ({'image_quality': 0}, {'image_format': 'bmp'}, {'image_name': '{nope}'}, {'colour': 'red'}):
+        with pytest.raises(SiteError):
+            site.settings.save(site.root, bad)

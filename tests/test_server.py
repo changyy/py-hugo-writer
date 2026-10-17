@@ -78,8 +78,9 @@ def test_image_upload_lands_next_to_a_bundle_post(app):
     assert json.loads(data)['url'] == 'pics-02.webp'
 
 
-def test_site_urls_need_the_preview(app):
-    assert request(app, 'GET', '/2024/05/hello-markdown/sample.webp')[0] == 404
+def test_pages_need_the_preview(app):
+    # Images come from disk (see below); pages only from a preview server, and there is none here.
+    assert request(app, 'GET', '/2024/05/hello-markdown.html')[0] == 404
 
 
 @needs_hugo
@@ -133,3 +134,35 @@ def test_image_list_and_delete_api(app):
     assert request(app, 'POST', '/api/image/delete', json.dumps({'post': BUNDLE, 'name': 'index.md'}), WRITE)[0] == 400
     _, _, data = request(app, 'GET', f'/api/images?post={BUNDLE}')
     assert json.loads(data)['images'] == []
+
+
+@needs_hugo
+def test_library_rename_and_settings_api(app):
+    _, _, data = request(app, 'GET', '/api/library')
+    (sample,) = [i for i in json.loads(data)['images'] if i['name'] == 'sample.webp']
+    assert [r['path'] for r in sample['refs']] == [BUNDLE]
+    _, _, data = request(app, 'POST', '/api/image/rename', json.dumps({'post': BUNDLE, 'name': 'sample.webp'}), WRITE)
+    assert json.loads(data)['name'] == 'hello-markdown-01.webp'
+    assert 'hello-markdown-01.webp' in app.site.read(BUNDLE)
+    status, _, data = request(app, 'POST', '/api/settings', json.dumps({'image_max_width': 640}), WRITE)
+    assert status == 200 and json.loads(data)['settings']['image_max_width'] == 640 == app.site.settings.image_max_width
+    assert request(app, 'POST', '/api/settings', json.dumps({'image_quality': 500}), WRITE)[0] == 400
+    file = 'content/posts/2024/05/hello-markdown/hello-markdown-01.webp'
+    assert request(app, 'POST', '/api/library/delete', json.dumps({'file': file}), WRITE)[0] == 200
+    assert request(app, 'POST', '/api/library/delete', json.dumps({'file': 'hugo.toml'}), WRITE)[0] == 400
+
+
+@needs_hugo
+def test_images_are_served_from_disk_even_when_hugo_would_not(site):
+    # publishResources = false (as in the demo site): Hugo does not publish an image no page links to.
+    folder = site.root / 'content/posts/2024/05/hello-markdown'
+    (folder / 'unused.png').write_bytes(png(8, 8))
+    app = serve(site)                       # no preview server at all
+    try:
+        status, ctype, data = request(app, 'GET', '/2024/05/hello-markdown/unused.png')
+        assert status == 200 and ctype == 'image/png' and data == (folder / 'unused.png').read_bytes()
+        assert request(app, 'GET', '/2024/05/hello-markdown/missing.png')[0] == 404
+        assert request(app, 'GET', '/2024/05/hello-markdown/../../../../hugo.toml')[0] == 404
+    finally:
+        app.shutdown()
+        app.server_close()

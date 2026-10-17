@@ -33,7 +33,8 @@ to your content folder. No server to host, no account, no database — just your
 | 5 | Drafts | new posts start as drafts; one checkbox flips `draft` in the front matter |
 | 6 | Drop or paste images (screenshots too) | scaled to 1024 px (or 512 / 256 / 128), re-encoded as WebP, EXIF / GPS removed (and reported), named after the post, saved next to it |
 | 7 | Move and align images in the WYSIWYG view | drag an image elsewhere; click it for Left / Center / Right |
-| 8 | Image panel per post | thumbnails, in use / unused, insert again, delete what you no longer use |
+| 8 | Image panel per post, and an image library for the whole site | thumbnails, which posts use each image, rename to `{slug}-NN`, delete what nothing uses |
+| 8b | Settings in the UI | image naming, maximum width, format, quality, metadata — saved to `.hugo-writer.toml` |
 | 9 | Autosave, and the open post stays in the address | a second after you stop typing, or ⌘S / Ctrl+S; reloading comes back to the same post |
 | 10 | English and Traditional Chinese UI | follows the browser language; switch at the bottom left |
 
@@ -111,8 +112,16 @@ what, you captured. Set `image_name = "{original}"` to keep the original names.
 
 EXIF and XMP are removed too — GPS position, camera and serial number, time taken,
 author — and the status line says what a photo carried, e.g. *removed: location (GPS),
-camera, time taken*. Set `strip_metadata = false` to keep EXIF. What is *in* the picture
-(an e-mail address in a screenshot, a face) is up to you.
+camera, time taken*. Set `strip_metadata = false` to keep EXIF. Formats stored without
+re-encoding are cleaned as well: animated GIF / WebP are saved again frame by frame
+without comments or EXIF, and SVGs lose `<metadata>` and editor data (Inkscape keeps the
+absolute path of the file it exported to, e.g. `/Users/you/…`) — and, since the site serves
+them, any `<script>` or `on…` attribute. What is *in* the picture (an e-mail address in a
+screenshot, a face) is up to you.
+
+Images uploaded before (or with `image_name = "{original}"`) can be renamed to
+`{slug}-NN` from the image panel or the image library; every Markdown post linking to the
+image — by file name or by its published URL — is updated.
 
 #### Moving and aligning
 
@@ -127,6 +136,13 @@ img[src$="#left"]   { display: block; margin: 0 auto 0 0; }
 img[src$="#center"] { display: block; margin: 0 auto; }
 img[src$="#right"]  { display: block; margin: 0 0 0 auto; }
 ```
+
+#### The image library
+
+**Image library** in the sidebar lists every image of the site (page bundles and
+`static/images/`) with the posts that link to it — click one to edit it — and filters
+unused images and the ones not named after their post. Deleting an image lists the posts
+it would break first.
 
 #### The image panel, and not publishing unused images
 

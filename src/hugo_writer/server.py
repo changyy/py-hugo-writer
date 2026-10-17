@@ -2,6 +2,7 @@
 import json
 import mimetypes
 import urllib.error
+import urllib.parse
 import urllib.request
 from http import HTTPStatus
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
@@ -9,6 +10,7 @@ from importlib import resources
 from urllib.parse import parse_qs, urlsplit
 
 from . import images
+from ._version import __version__
 from .site import SiteError, atomic_write, has_raw_html
 
 # Every request that changes files must carry this header. A web page on another
@@ -118,8 +120,16 @@ class Handler(BaseHTTPRequestHandler):
         self._send(200, node.read_bytes(), ctype + ('; charset=utf-8' if ctype.startswith(('text/', 'application/javascript')) else ''))
 
     def proxy(self):
-        # Anything else is a site URL (an image in a post, mostly): fetch it from the
-        # preview hugo server, so the WYSIWYG editor shows images with their real paths.
+        # Anything else is a site URL, an image in a post mostly. Images come straight from disk
+        # (Hugo may not publish an unused or just-dropped one); the rest from the preview server.
+        url_path = urlsplit(self.path).path
+        try:
+            file = self.server.site.image_file(urllib.parse.unquote(url_path))
+        except SiteError:
+            file = None
+        if file is not None:
+            ctype = mimetypes.guess_type(file.name)[0] or 'application/octet-stream'
+            return self._send(200, file.read_bytes(), ctype)
         preview = self.server.preview
         if preview is None:
             return self._error(HTTPStatus.NOT_FOUND, 'no preview server')
@@ -136,6 +146,7 @@ class Handler(BaseHTTPRequestHandler):
         self._json({
             'root': str(site.root),
             'name': site.root.name,
+            'version': __version__,
             'preview': preview.base if preview else None,
             'settings': vars(site.settings),
         })
@@ -175,6 +186,22 @@ class Handler(BaseHTTPRequestHandler):
         self.server.site.delete_image(data.get('post', ''), data.get('name', ''))
         self._json({'ok': True})
 
+    def library(self):
+        self._json({'images': self.server.site.library(self._query().get('post') or None)})
+
+    def library_delete(self):
+        self.server.site.delete_file(json.loads(self._body()).get('file', ''))
+        self._json({'ok': True})
+
+    def rename_image(self):
+        data = json.loads(self._body())
+        self._json(self.server.site.rename_image(data.get('post', ''), data.get('name', '')))
+
+    def save_settings(self):
+        site = self.server.site
+        site.settings = site.settings.save(site.root, json.loads(self._body()))
+        self._json({'settings': vars(site.settings)})
+
     def upload_image(self):
         q = self._query()
         site = self.server.site
@@ -193,7 +220,8 @@ class Handler(BaseHTTPRequestHandler):
 
 
 GET_ROUTES = {'/': Handler.index, '/api/info': Handler.info, '/api/posts': Handler.list_posts,
-              '/api/post': Handler.get_post, '/api/images': Handler.list_images}
+              '/api/post': Handler.get_post, '/api/images': Handler.list_images, '/api/library': Handler.library}
 POST_ROUTES = {'/api/post': Handler.create_post, '/api/draft': Handler.draft, '/api/image': Handler.upload_image,
-               '/api/image/delete': Handler.delete_image}
+               '/api/image/delete': Handler.delete_image, '/api/image/rename': Handler.rename_image,
+               '/api/library/delete': Handler.library_delete, '/api/settings': Handler.save_settings}
 PUT_ROUTES = {'/api/post': Handler.save_post}

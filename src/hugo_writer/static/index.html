@@ -45,8 +45,29 @@ aside { display: flex; flex-direction: column; min-height: 0; border-right: 1px 
 .site-name img { width: 26px; height: 26px; flex: none; }
 .site-name span { overflow: hidden; text-overflow: ellipsis; }
 .count { color: var(--muted); font-size: 12px; }
-.side-foot { padding: 8px 12px; border-top: 1px solid var(--border); }
-.side-foot select { width: 100%; }
+.side-foot { display: flex; gap: 8px; padding: 8px 12px; border-top: 1px solid var(--border); }
+.side-foot select { flex: 1; min-width: 0; }
+.about { padding: 0 12px 8px; font-size: 11px; color: var(--muted); }
+.about a { color: var(--muted); }
+#library-btn { width: 100%; }
+main.library-mode > .toolbar, main.library-mode > .notice, main.library-mode > .panes { display: none; }
+#library { display: none; flex-direction: column; flex: 1; min-height: 0; }
+main.library-mode #library { display: flex; }
+#library .toolbar { gap: 8px; }
+#library-list { list-style: none; margin: 0; padding: 0; overflow-y: auto; flex: 1; background: var(--panel); }
+#library-list > li { display: grid; grid-template-columns: 96px 1fr auto; gap: 14px; align-items: start; padding: 12px 16px; border-bottom: 1px solid var(--border); }
+#library-list > li.unused { background: var(--draft-bg); }
+#library-list img { width: 96px; height: 72px; object-fit: cover; border-radius: 4px; background: var(--code); }
+#library-list .name { font-weight: 600; word-break: break-all; }
+#library-list .meta { color: var(--muted); font-size: 12px; margin: 2px 0 4px; display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+#library-list .refs { margin: 4px 0 0; padding-left: 18px; font-size: 13px; }
+#library-list .link { border: 0; background: none; padding: 0; color: var(--accent); cursor: pointer; text-align: left; }
+#library-list .link:hover { text-decoration: underline; background: none; }
+#library-list .actions { display: flex; flex-direction: column; gap: 6px; }
+#library-list .empty-list { display: block; padding: 24px 16px; color: var(--muted); }
+#settings-dialog label.check { display: flex; align-items: center; gap: 6px; }
+#settings-dialog label.check input { width: auto; flex: none; }
+#settings-dialog select, #settings-dialog input[type=number] { width: 100%; }
 #posts { list-style: none; margin: 0; padding: 4px 0; overflow-y: auto; flex: 1; }
 #posts li { padding: 7px 12px; cursor: pointer; border-left: 3px solid transparent; }
 #posts li:hover { background: var(--hover); }
@@ -135,11 +156,14 @@ dialog .actions { display: flex; justify-content: flex-end; gap: 8px; }
       </select>
       <span class="count" id="count"></span>
     </div>
+    <button id="library-btn" data-i18n="library"></button>
   </div>
   <ul id="posts"></ul>
   <div class="side-foot">
     <select id="lang" aria-label="Language"><option value="en">English</option><option value="zh-TW">繁體中文</option></select>
+    <button id="settings-btn" data-i18n-title="settings" aria-label="Settings">⚙</button>
   </div>
+  <div class="about"><a id="about" href="https://pypi.org/project/hugo-writer/" target="_blank" rel="noopener">hugo-writer</a></div>
 </aside>
 
 <main>
@@ -173,10 +197,26 @@ dialog .actions { display: flex; justify-content: flex-end; gap: 8px; }
     </div>
     <div id="preview-pane" hidden><div class="empty" id="preview-empty" data-i18n="noPreview"></div><iframe id="preview" hidden></iframe></div>
   </div>
+  <section id="library">
+    <div class="toolbar">
+      <span class="title" data-i18n="library"></span>
+      <input type="search" id="library-search" data-i18n-placeholder="librarySearch">
+      <select id="library-filter">
+        <option value="all" data-i18n="libraryAll"></option>
+        <option value="unused" data-i18n="libraryUnused"></option>
+        <option value="used" data-i18n="libraryUsed"></option>
+        <option value="names" data-i18n="libraryNames"></option>
+      </select>
+      <span class="count" id="library-count"></span>
+      <button id="library-close" data-i18n="libraryBack"></button>
+    </div>
+    <div class="notice" data-i18n="libraryHint"></div>
+    <ul id="library-list"></ul>
+  </section>
 </main>
 
 <aside id="images-panel" hidden>
-  <header><strong data-i18n="imagesTitle"></strong><button id="delete-unused"></button><button id="images-close" aria-label="Close">✕</button></header>
+  <header><strong data-i18n="imagesTitle"></strong><button id="rename-all"></button><button id="delete-unused"></button><button id="images-close" aria-label="Close">✕</button></header>
   <div class="hint" data-i18n="imagesHint"></div>
   <ul id="images-list"></ul>
 </aside>
@@ -187,6 +227,28 @@ dialog .actions { display: flex; justify-content: flex-end; gap: 8px; }
   <button data-align="right" data-i18n="alignRight"></button>
   <button data-align="" data-i18n="alignDefault"></button>
 </div>
+
+<dialog id="settings-dialog">
+  <form method="dialog" id="settings-form">
+    <h2 data-i18n="settings"></h2>
+    <label><span data-i18n="setName"></span>
+      <select id="set-name">
+        <option value="{slug}-{n}" data-i18n="setNameSlug"></option>
+        <option value="{original}" data-i18n="setNameOriginal"></option>
+        <option value="custom" data-i18n="setNameCustom"></option>
+      </select>
+      <input type="text" id="set-name-custom" placeholder="{slug}-fig-{n}" hidden>
+      <span class="hint" data-i18n="setNameHint"></span></label>
+    <label><span data-i18n="setWidth"></span> <input type="number" id="set-width" min="16" max="8192"></label>
+    <label><span data-i18n="setFormat"></span>
+      <select id="set-format"><option value="webp">WebP</option><option value="jpeg">JPEG</option><option value="png">PNG</option></select></label>
+    <label><span data-i18n="setQuality"></span> <input type="number" id="set-quality" min="1" max="100"></label>
+    <label class="check"><input type="checkbox" id="set-strip"> <span data-i18n="setStrip"></span></label>
+    <span class="hint" data-i18n="setSavedTo"></span>
+    <div class="err" id="set-err"></div>
+    <div class="actions"><button value="cancel" formnovalidate data-i18n="cancel"></button><button class="primary" value="ok" data-i18n="save"></button></div>
+  </form>
+</dialog>
 
 <dialog id="new-dialog">
   <form method="dialog" id="new-form">
@@ -209,6 +271,19 @@ const I18N = {
     newPost: 'New post', search: 'Search titles', filterAll: 'All posts', filterDrafts: 'Drafts',
     filterPublished: 'Published', filterEditable: 'Markdown only', noPost: 'No post open', draft: 'Draft',
     viewWysiwyg: 'WYSIWYG', viewSource: 'Source', viewPreview: 'Hugo preview', split: 'Side-by-side preview',
+    library: 'Image library', librarySearch: 'Search images or posts', libraryAll: 'All images', libraryUnused: 'Unused',
+    libraryUsed: 'In use', libraryNames: 'Not named after their post', libraryBack: 'Back to posts',
+    libraryHint: 'Every image of the site, and the posts that link to it. Click a post to edit it.',
+    belongsTo: 'in', notInBundle: 'not in a post folder', usedBy: 'used by {n} post(s)', usedByNone: 'not used',
+    renameOne: 'Rename', renameAll: 'Tidy names ({n})', renamed: 'Renamed {n} image(s)',
+    renameSkipped: 'These posts link to the image but are not Markdown, so they were not updated:\n\n{posts}',
+    confirmDeleteRefs: 'Delete {name}?\n\nIt is used by {n} post(s), which will show a broken image:\n{posts}',
+    settings: 'Settings', setName: 'Name images', setNameSlug: 'After the post: {slug}-01, {slug}-02 … (recommended)',
+    setNameOriginal: 'Keep the original file name', setNameCustom: 'Custom pattern…',
+    setNameHint: '{slug} = the post\'s slug, {n} = 01, 02 …, {original} = the uploaded file\'s name',
+    setWidth: 'Maximum width (px)', setFormat: 'Format', setQuality: 'Quality (1–100)',
+    setStrip: 'Remove EXIF / XMP (GPS, camera, time taken, author)', setSavedTo: 'Saved to .hugo-writer.toml in the site folder.',
+    save: 'Save', settingsSaved: 'Settings saved',
     images: 'Images ({n})', imagesTitle: 'Images in this post', inUse: 'in use', unused: 'unused', insert: 'Insert', remove: 'Delete',
     deleteUnused: 'Delete unused ({n})', noImages: 'No images yet. Drop or paste one into the editor.',
     imagesHint: 'Images you dropped in but no longer use are marked unused: delete them so they are not published.',
@@ -231,6 +306,19 @@ const I18N = {
     newPost: '新增文章', search: '搜尋標題', filterAll: '全部文章', filterDrafts: '草稿',
     filterPublished: '已發布', filterEditable: '只看 Markdown', noPost: '尚未開啟文章', draft: '草稿',
     viewWysiwyg: '所見即所得', viewSource: '原始檔', viewPreview: 'Hugo 預覽', split: '並排預覽',
+    library: '圖片庫', librarySearch: '搜尋圖片或文章', libraryAll: '全部圖片', libraryUnused: '未使用',
+    libraryUsed: '使用中', libraryNames: '檔名未依文章命名', libraryBack: '回到文章',
+    libraryHint: '整個網站的圖片，以及引用它的文章。點文章即可開啟修改。',
+    belongsTo: '屬於', notInBundle: '不在文章資料夾', usedBy: '{n} 篇文章使用', usedByNone: '沒有文章使用',
+    renameOne: '改名', renameAll: '整理檔名 ({n})', renamed: '已改名 {n} 張圖片',
+    renameSkipped: '以下文章也引用這張圖，但不是 Markdown，沒有自動更新：\n\n{posts}',
+    confirmDeleteRefs: '刪除 {name}？\n\n有 {n} 篇文章使用它，刪除後會變成破圖：\n{posts}',
+    settings: '設定', setName: '圖片命名', setNameSlug: '依文章：{slug}-01、{slug}-02 …（建議）',
+    setNameOriginal: '保留原始檔名', setNameCustom: '自訂格式…',
+    setNameHint: '{slug} = 文章網址代稱，{n} = 01、02 …，{original} = 上傳檔案的原始檔名',
+    setWidth: '最大寬度（px）', setFormat: '格式', setQuality: '品質（1–100）',
+    setStrip: '去除 EXIF / XMP（GPS 位置、相機、拍攝時間、作者）', setSavedTo: '存在網站資料夾的 .hugo-writer.toml。',
+    save: '儲存', settingsSaved: '設定已儲存',
     images: '圖片 ({n})', imagesTitle: '這篇文章的圖片', inUse: '使用中', unused: '未使用', insert: '插入', remove: '刪除',
     deleteUnused: '刪除未使用 ({n})', noImages: '還沒有圖片。把圖片拖拉或貼進編輯器即可。',
     imagesHint: '拖進來但已經沒用到的圖片會標示「未使用」，刪掉就不會被發布出去。',
@@ -260,7 +348,8 @@ function pickLang() {
   return (navigator.languages || [navigator.language]).some(l => l.toLowerCase().startsWith('zh')) ? 'zh-TW' : 'en';
 }
 const LANG = pickLang();
-const t = (key, vars = {}) => (I18N[LANG][key] ?? I18N.en[key] ?? key).replace(/\{(\w+)\}/g, (_, k) => vars[k] ?? '');
+// {name} placeholders are filled from vars; others (e.g. "{slug}" shown to the user) stay as they are.
+const t = (key, vars = {}) => (I18N[LANG][key] ?? I18N.en[key] ?? key).replace(/\{(\w+)\}/g, (m, k) => k in vars ? vars[k] : m);
 
 document.documentElement.lang = LANG;
 document.querySelectorAll('[data-i18n]').forEach(el => { el.textContent = t(el.dataset.i18n); });
@@ -690,9 +779,20 @@ const imageFiles = list => [...list].filter(f => f && f.type.startsWith('image/'
 state.images = [];
 
 // Whether the text links to url: (url), (url#right), "url", =url …, but not "x-url" or "url2".
+// A bare file name must not follow a "/": "/other-post/x.webp" is not this bundle's "x.webp".
 function linksTo(text, url) {
   const esc = url.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-  return new RegExp(`(^|[\\s("'/=])${esc}(?=[)#\\s"'?]|$)`).test(text);
+  const before = url.includes('/') ? `[\\s("'/=]` : `[\\s("'=]`;
+  return new RegExp(`(^|${before})${esc}(?=[)#\\s"'?]|$)`, 'm').test(text);
+}
+
+// The slug images are named after: the bundle folder (…/slug/index.md) or the file name.
+function postSlug(path) {
+  const parts = path.split('/'), file = parts.pop();
+  return /^_?index\./.test(file) ? parts.pop() : file.replace(/\.[^.]*$/, '');
+}
+function namedAfterPost(name, slug) {
+  return new RegExp(`^${slug.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}-\\d{2,}\\.`).test(name);
 }
 
 async function loadImages() {
@@ -710,6 +810,10 @@ function renderImages() {
   $('images-btn').textContent = t('images', { n: images.length });
   $('delete-unused').textContent = t('deleteUnused', { n: unused.length });
   $('delete-unused').disabled = !unused.length;
+  const slug = editable ? postSlug(state.current.path) : '';
+  const misnamed = images.filter(i => !namedAfterPost(i.name, slug));
+  $('rename-all').textContent = t('renameAll', { n: misnamed.length });
+  $('rename-all').hidden = !misnamed.length;
   if (!editable) $('images-panel').hidden = true;
   if (!images.length) {
     const li = document.createElement('li'); li.className = 'empty-list'; li.textContent = t('noImages');
@@ -728,7 +832,12 @@ function renderImages() {
     const actions = document.createElement('div'); actions.className = 'actions';
     const insert = document.createElement('button'); insert.textContent = t('insert'); insert.onclick = () => insertImage(i.url);
     const del = document.createElement('button'); del.textContent = t('remove'); del.onclick = () => deleteImages([i]);
-    actions.append(insert, del);
+    actions.append(insert);
+    if (!namedAfterPost(i.name, slug)) {
+      const rename = document.createElement('button'); rename.textContent = t('renameOne'); rename.onclick = () => renameImages([i]);
+      actions.append(rename);
+    }
+    actions.append(del);
     info.append(name, meta, actions);
     li.append(thumb, info);
     return li;
@@ -749,12 +858,23 @@ function insertImage(url) {
 }
 
 async function deleteImages(images) {
-  const text = currentText();
+  const text = currentText(), here = state.current.path;
+  // Which other posts link to these images (the open post is judged from the editor, unsaved edits too).
+  let others = {};
+  try {
+    const lib = (await api('GET', '/api/library?post=' + encodeURIComponent(here))).images;
+    for (const i of lib) others[i.name] = i.refs.filter(r => r.path !== here);
+  } catch {}
+  const refsOf = i => [...(linksTo(text, i.url) ? [{ title: state.current.title || here }] : []), ...(others[i.name] || [])];
   if (images.length === 1) {
-    const [i] = images;
-    if (!confirm(t(linksTo(text, i.url) ? 'confirmDeleteUsed' : 'confirmDelete', { name: i.name }))) return;
-  } else if (!confirm(t('confirmDeleteUnused', { n: images.length, names: images.map(i => i.name).join('\n') }))) {
-    return;
+    const [i] = images, refs = refsOf(i);
+    const ask = refs.length
+      ? t('confirmDeleteRefs', { name: i.name, n: refs.length, posts: refs.map(r => '• ' + r.title).join('\n') })
+      : t('confirmDelete', { name: i.name });
+    if (!confirm(ask)) return;
+  } else {
+    images = images.filter(i => !(others[i.name] || []).length);   // "unused" here may still be used elsewhere
+    if (!images.length || !confirm(t('confirmDeleteUnused', { n: images.length, names: images.map(i => i.name).join('\n') }))) return;
   }
   try {
     for (const i of images) await api('POST', '/api/image/delete', { post: state.current.path, name: i.name });
@@ -766,6 +886,139 @@ async function deleteImages(images) {
 $('images-btn').onclick = () => { $('images-panel').hidden = !$('images-panel').hidden; if (!$('images-panel').hidden) loadImages(); };
 $('images-close').onclick = () => { $('images-panel').hidden = true; };
 $('delete-unused').onclick = () => deleteImages(state.images.filter(i => !linksTo(currentText(), i.url)));
+$('rename-all').onclick = () => renameImages(state.images.filter(i => !namedAfterPost(i.name, postSlug(state.current.path))));
+
+// Rename to {slug}-NN; the server rewrites every Markdown post linking to the image.
+async function renameImages(images, post = state.current?.path) {
+  if (!images.length || !post) return;
+  if (state.current?.path === post) await save();
+  const skipped = [];
+  try {
+    for (const i of images) {
+      const res = await api('POST', '/api/image/rename', { post, name: i.name });
+      skipped.push(...res.skipped.map(r => '• ' + r.title));
+    }
+    status(t('renamed', { n: images.length }));
+  } catch (e) { status(e.message, true); }
+  if (skipped.length) alert(t('renameSkipped', { posts: [...new Set(skipped)].join('\n') }));
+  if (state.current?.path === post && !document.querySelector('main').classList.contains('library-mode')) await openPost(post);
+}
+
+// -- the image library: every image of the site ---------------------------------
+
+state.library = [];
+
+async function openLibrary() {
+  if (state.dirty) await save();
+  hideImageTools();
+  $('images-panel').hidden = true;
+  document.querySelector('main').classList.add('library-mode');
+  document.querySelector('base').href = '/';
+  $('library-list').replaceChildren();
+  try { state.library = (await api('GET', '/api/library')).images; } catch (e) { status(e.message, true); }
+  renderLibrary();
+}
+
+function closeLibrary() {
+  document.querySelector('main').classList.remove('library-mode');
+  if (state.current) document.querySelector('base').href = folderOf(state.current.url);
+}
+
+function renderLibrary() {
+  const q = $('library-search').value.trim().toLowerCase(), f = $('library-filter').value;
+  const shown = state.library.filter(i => {
+    const owner = i.owner;
+    if (f === 'unused' && i.refs.length) return false;
+    if (f === 'used' && !i.refs.length) return false;
+    if (f === 'names' && (!owner || namedAfterPost(i.name, postSlug(owner.path)))) return false;
+    return !q || i.file.toLowerCase().includes(q) || i.refs.some(r => r.title.toLowerCase().includes(q))
+      || (owner && owner.title.toLowerCase().includes(q));
+  });
+  $('library-count').textContent = `${shown.length} / ${state.library.length}`;
+  if (!shown.length) {
+    const li = document.createElement('li'); li.className = 'empty-list'; li.textContent = t('noImages');
+    return $('library-list').replaceChildren(li);
+  }
+  const postLink = (path, title) => {
+    const b = document.createElement('button'); b.className = 'link'; b.textContent = title || path;
+    b.onclick = () => { closeLibrary(); openPost(path); };
+    return b;
+  };
+  $('library-list').replaceChildren(...shown.map(i => {
+    const li = document.createElement('li');
+    if (!i.refs.length) li.className = 'unused';
+    const thumb = document.createElement('img'); thumb.alt = ''; thumb.loading = 'lazy';
+    if (i.url) thumb.src = i.url;
+    const info = document.createElement('div');
+    const name = document.createElement('div'); name.className = 'name'; name.textContent = i.name;
+    const meta = document.createElement('div'); meta.className = 'meta';
+    const badge = document.createElement('span'); badge.className = i.refs.length ? 'badge ro' : 'badge';
+    badge.textContent = i.refs.length ? t('usedBy', { n: i.refs.length }) : t('usedByNone');
+    const where = document.createElement('span');
+    if (i.owner) where.append(t('belongsTo') + ' ', postLink(i.owner.path, i.owner.title));
+    else where.textContent = t('notInBundle');
+    meta.append(`${Math.max(1, Math.round(i.bytes / 1024))} KB`, badge, where);
+    info.append(name, meta);
+    if (i.refs.length) {
+      const refs = document.createElement('ul'); refs.className = 'refs';
+      for (const r of i.refs) { const item = document.createElement('li'); item.append(postLink(r.path, r.title)); refs.append(item); }
+      info.append(refs);
+    }
+    const actions = document.createElement('div'); actions.className = 'actions';
+    if (i.owner && !namedAfterPost(i.name, postSlug(i.owner.path))) {
+      const rename = document.createElement('button'); rename.textContent = t('renameOne');
+      rename.onclick = async () => { await renameImages([i], i.owner.path); await openLibrary(); };
+      actions.append(rename);
+    }
+    const del = document.createElement('button'); del.textContent = t('remove');
+    del.onclick = async () => {
+      const ask = i.refs.length
+        ? t('confirmDeleteRefs', { name: i.name, n: i.refs.length, posts: i.refs.map(r => '• ' + r.title).join('\n') })
+        : t('confirmDelete', { name: i.name });
+      if (!confirm(ask)) return;
+      try { await api('POST', '/api/library/delete', { file: i.file }); status(t('deleted', { n: 1 })); } catch (e) { status(e.message, true); }
+      await openLibrary();
+    };
+    actions.append(del);
+    li.append(thumb, info, actions);
+    return li;
+  }));
+}
+
+$('library-btn').onclick = openLibrary;
+$('library-close').onclick = closeLibrary;
+$('library-search').oninput = renderLibrary;
+$('library-filter').onchange = renderLibrary;
+
+// -- settings ---------------------------------------------------------------------
+
+function fillSettings() {
+  const s = state.info.settings, presets = ['{slug}-{n}', '{original}'];
+  $('set-name').value = presets.includes(s.image_name) ? s.image_name : 'custom';
+  $('set-name-custom').value = presets.includes(s.image_name) ? '' : s.image_name;
+  $('set-name-custom').hidden = $('set-name').value !== 'custom';
+  $('set-width').value = s.image_max_width;
+  $('set-format').value = s.image_format === 'jpg' ? 'jpeg' : s.image_format;
+  $('set-quality').value = s.image_quality;
+  $('set-strip').checked = s.strip_metadata;
+}
+$('settings-btn').onclick = () => { fillSettings(); $('set-err').textContent = ''; $('settings-dialog').showModal(); };
+$('set-name').onchange = () => { $('set-name-custom').hidden = $('set-name').value !== 'custom'; };
+$('settings-form').onsubmit = async e => {
+  if (e.submitter?.value !== 'ok') return;
+  e.preventDefault();
+  const name = $('set-name').value === 'custom' ? $('set-name-custom').value.trim() : $('set-name').value;
+  try {
+    const res = await api('POST', '/api/settings', {
+      image_name: name, image_max_width: Number($('set-width').value), image_format: $('set-format').value,
+      image_quality: Number($('set-quality').value), strip_metadata: $('set-strip').checked,
+    });
+    state.info.settings = res.settings;
+    $('imgsize').options[0].textContent = t('sizeOriginal', { max: res.settings.image_max_width });
+    $('settings-dialog').close();
+    status(t('settingsSaved'));
+  } catch (err) { $('set-err').textContent = err.message; }
+};
 
 // -- new post -----------------------------------------------------------------
 
@@ -839,6 +1092,8 @@ layout();
     $('site-name').textContent = state.info.name;
     $('site-name').parentElement.title = state.info.root;
     document.title = `${state.info.name} · hugo-writer`;
+    $('about').textContent = `hugo-writer ${state.info.version}`;
+    $('about').title = 'pypi.org/project/hugo-writer';
     $('imgsize').options[0].textContent = t('sizeOriginal', { max: state.info.settings.image_max_width });
     await loadPosts();
     // ?open=content/posts/…/index.md opens a post directly (handy for bookmarks).

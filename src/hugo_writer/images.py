@@ -1,9 +1,10 @@
 """Images dropped or pasted into the editor: shrink, re-encode, strip metadata, store."""
 import io
 import re
+import xml.etree.ElementTree as ET
 from pathlib import Path
 
-from PIL import Image, ImageOps
+from PIL import Image, ImageOps, ImageSequence
 
 MAX_UPLOAD = 50 * 1024 * 1024
 
@@ -28,23 +29,84 @@ def metadata(img) -> list[str]:
     return found
 
 
+SVG = 'http://www.w3.org/2000/svg'
+# Editor namespaces: Inkscape keeps the absolute path of the file it exported to, the document
+# name and window layout; Sodipodi, Illustrator and Sketch similar things.
+EDITOR_NS = ('sodipodi', 'inkscape', 'adobe', 'illustrator', 'sketch', 'figma')
+
+
+def sanitize_svg(data: bytes) -> tuple[bytes, list[str]]:
+    """An SVG without what it says about its author and computer, and without scripts.
+
+    Removes <metadata> (author, licence, RDF), editor elements and attributes (e.g.
+    inkscape:export-filename="/Users/you/…"), comments, and — since the SVG is served from the
+    site — <script>, <foreignObject> and on… event attributes.
+    """
+    for prefix, uri in (('', SVG), ('xlink', 'http://www.w3.org/1999/xlink')):
+        ET.register_namespace(prefix, uri)
+    try:
+        root = ET.fromstring(data)                    # comments and the XML prolog are dropped here
+    except ET.ParseError as e:
+        raise ValueError('not a valid SVG') from e
+    found = set()
+
+    def editor(name):
+        return name.startswith('{') and any(ns in name.split('}')[0].lower() for ns in EDITOR_NS)
+
+    for parent in list(root.iter()):
+        for child in list(parent):
+            tag = child.tag if isinstance(child.tag, str) else ''
+            local = tag.split('}')[-1]
+            if local == 'metadata' or editor(tag):
+                parent.remove(child); found.add('metadata')
+            elif local in ('script', 'foreignObject'):
+                parent.remove(child); found.add('script')
+    for el in root.iter():
+        for attr in list(el.attrib):
+            if editor(attr):
+                del el.attrib[attr]; found.add('metadata')
+            elif attr.lower().startswith('on') or (attr.endswith('href') and el.attrib[attr].strip().lower().startswith('javascript:')):
+                del el.attrib[attr]; found.add('script')
+    return ET.tostring(root, encoding='utf-8', xml_declaration=True), sorted(found)
+
+
+def strip_animation(img, fmt: str) -> bytes:
+    """Save an animated GIF / WebP again, frame by frame, without comments, EXIF or XMP."""
+    frames, durations = [], []
+    for frame in ImageSequence.Iterator(img):
+        durations.append(frame.info.get('duration', 100))
+        clean = frame.convert('RGBA')
+        clean.info = {}                               # convert() copies comment / exif / xmp along
+        frames.append(clean)
+    out = io.BytesIO()
+    frames[0].save(out, fmt, save_all=True, append_images=frames[1:], duration=durations,
+                   loop=img.info.get('loop', 0), disposal=2 if fmt == 'GIF' else 0)
+    return out.getvalue()
+
+
 def process(data: bytes, filename: str, max_width: int, fmt: str, quality: int,
             strip: bool = True) -> tuple[bytes, str, list[str]]:
     """Return (image bytes, file extension, metadata removed).
 
     Raster images wider than `max_width` are scaled down, then re-encoded as `fmt`.
     Re-encoding drops EXIF and XMP (GPS position, camera, time taken, …) unless strip is False.
-    SVGs and animated images are stored as they are.
+    SVGs are cleaned (see sanitize_svg), animated images saved again without their metadata;
+    both keep their format and size.
     """
     if Path(filename).suffix.lower() == '.svg':
-        return data, '.svg', []
+        clean, found = sanitize_svg(data)             # scripts go even when keeping metadata
+        return (clean, '.svg', found) if strip or 'script' in found else (data, '.svg', [])
     try:
         img = Image.open(io.BytesIO(data))
         img.load()
     except Exception as e:
         raise ValueError(f'not an image: {filename}') from e
     if getattr(img, 'is_animated', False):
-        return data, '.' + (img.format or 'gif').lower(), []
+        kind = (img.format or 'GIF').upper()
+        if not strip:
+            return data, '.' + kind.lower(), []
+        found = metadata(img) + (['comment'] if img.info.get('comment') else [])
+        return strip_animation(img, kind), '.' + kind.lower(), found
 
     found = metadata(img)
     img = ImageOps.exif_transpose(img)                          # applies and drops the rotation tag

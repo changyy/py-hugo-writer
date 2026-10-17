@@ -1,5 +1,19 @@
 # Changelog
 
+## 1.20261017.1101806
+
+- Image library: every image of the site, the posts linking to it (click to edit), filters for unused
+  images and names not following the post; deleting lists the posts it would break.
+- Rename images to `{slug}-NN` from the panel or the library; every Markdown post linking to the
+  image, by file name or by published URL, is updated.
+- Privacy: SVGs lose metadata, editor data (e.g. Inkscape's absolute export path) and scripts;
+  animated GIF / WebP lose comments and EXIF.
+- Settings dialog (gear, bottom left) for image naming, width, format, quality and metadata,
+  saved to `.hugo-writer.toml` with its comments kept.
+- Images in the editor, the panel and the library come from disk, so unused (unpublished with
+  `publishResources = false`) and just-dropped images show.
+- The sidebar shows the hugo-writer version, linking to PyPI.
+
 ## 1.20261017.1093729
 
 - A logo: a fountain-pen nib whose slit forms an "H". Favicon for the editor tab, next to the site name,

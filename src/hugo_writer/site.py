@@ -9,6 +9,7 @@ import os
 import re
 import subprocess
 import tempfile
+import time
 import tomllib
 from dataclasses import dataclass, fields
 from datetime import datetime
@@ -55,6 +56,44 @@ class Settings:
         known = {f.name for f in fields(cls)}
         return cls(**{k: v for k, v in data.items() if k in known})
 
+    def save(self, root: Path, changes: dict) -> 'Settings':
+        """Write changed options to .hugo-writer.toml, keeping its other lines and comments."""
+        types = {f.name: type(getattr(self, f.name)) for f in fields(self)}
+        values = {}
+        for key, value in changes.items():
+            if key not in types:
+                raise SiteError(f'unknown setting: {key}')
+            try:
+                value = value if types[key] is not bool else (value in (True, 'true', '1', 1))
+                values[key] = types[key](value)
+            except (TypeError, ValueError):
+                raise SiteError(f'{key} must be a {types[key].__name__}')
+        if 'image_max_width' in values and not 16 <= values['image_max_width'] <= 8192:
+            raise SiteError('image_max_width must be between 16 and 8192')
+        if 'image_quality' in values and not 1 <= values['image_quality'] <= 100:
+            raise SiteError('image_quality must be between 1 and 100')
+        if 'image_format' in values and values['image_format'].lower() not in ('webp', 'jpeg', 'jpg', 'png'):
+            raise SiteError('image_format must be webp, jpeg or png')
+        if 'image_name' in values:
+            try:
+                values['image_name'].format(slug='s', n='01', original='o')
+            except (KeyError, IndexError, ValueError):
+                raise SiteError('image_name may only use {slug}, {n} and {original}')
+        file = root / '.hugo-writer.toml'
+        lines = file.read_text(encoding='utf-8').splitlines() if file.is_file() else []
+        for key, value in values.items():
+            literal = ('true' if value else 'false') if isinstance(value, bool) else (
+                str(value) if isinstance(value, int) else quote(value))
+            pattern = re.compile(rf'^\s*{key}\s*=')
+            for i, line in enumerate(lines):
+                if pattern.match(line):
+                    lines[i] = f'{key} = {literal}'
+                    break
+            else:
+                lines.append(f'{key} = {literal}')
+        atomic_write(file, ('\n'.join(lines) + '\n').encode('utf-8'))
+        return Settings.load(root)
+
 
 class Site:
     def __init__(self, root, hugo: str = 'hugo'):
@@ -67,7 +106,11 @@ class Site:
 
     # -- listing -----------------------------------------------------------------
 
-    def posts(self) -> list[dict]:
+    def posts(self, max_age: float = 0) -> list[dict]:
+        """Every page of the site via `hugo list all`; max_age > 0 may reuse a recent listing."""
+        cached = getattr(self, '_posts', None)
+        if max_age and cached and time.monotonic() - cached[0] < max_age:
+            return cached[1]
         out = self._list()
         if out.returncode != 0:
             raise SiteError(out.stderr.strip() or 'hugo list all failed')
@@ -85,6 +128,7 @@ class Site:
                 'editable': Path(row['path']).suffix.lower() in EDITABLE_SUFFIXES,
             })
         posts.sort(key=lambda p: p['date'], reverse=True)
+        self._posts = (time.monotonic(), posts)
         return posts
 
     _list_flags = ['--noBuildLock']
@@ -188,6 +232,138 @@ class Site:
         if path.suffix.lower() not in IMAGE_SUFFIXES or not path.is_file():
             raise SiteError(f'no such image: {name}')
         path.unlink()
+
+    # -- the whole site's images -------------------------------------------------
+
+    def library(self, only_post: str | None = None) -> list[dict]:
+        """Every image of the site — in page bundles and in static/images/ — with the posts using it.
+
+        A post uses an image when its text links to it: by file name from the bundle's own page,
+        or by its published URL (/2026/10/slug/x.webp, /images/…) from any page.
+        """
+        posts = self.posts(max_age=5)
+        owners = {}
+        for p in posts:
+            path = self.root / p['path']
+            if path.stem in ('index', '_index'):
+                owners[path.parent] = p
+        texts = {}
+        for p in posts:
+            try:
+                texts[p['path']] = (self.root / p['path']).read_text(encoding='utf-8', errors='replace')
+            except OSError:
+                texts[p['path']] = ''
+        static = self.root / 'static' / 'images'
+        files = [f for base in (self.content, static) if base.is_dir() for f in sorted(base.rglob('*'))
+                 if f.is_file() and f.suffix.lower() in IMAGE_SUFFIXES]
+        if only_post:
+            folder, _ = self.image_target(only_post)
+            files = [f for f in files if f.parent == folder]
+        items = []
+        for f in files:
+            owner = owners.get(f.parent)
+            if f.is_relative_to(static):
+                url = '/images/' + f.relative_to(static).as_posix()
+            elif owner:
+                url = folder_of(owner['url']) + f.name
+            else:
+                url = None                                     # not a bundle: not published as a page file
+            refs = []
+            for p in posts:
+                text = texts[p['path']]
+                if (url and links_to(text, url)) or (owner is p and links_to(text, f.name)):
+                    refs.append({'path': p['path'], 'title': p['title'], 'editable': p['editable']})
+            st = f.stat()
+            items.append({'file': f.relative_to(self.root).as_posix(), 'name': f.name, 'url': url,
+                          'owner': {'path': owner['path'], 'title': owner['title']} if owner else None,
+                          'bytes': st.st_size, 'modified': st.st_mtime, 'refs': refs})
+        return items
+
+    def image_file(self, url_path: str) -> Path | None:
+        """The file on disk behind a site URL of an image, without asking Hugo.
+
+        /images/… is static/images/…; /2026/10/slug/x.webp is x.webp in the bundle of the post
+        published at /2026/10/slug.html (or /2026/10/slug/). Hugo itself only serves bundle files
+        that a page links to (with publishResources = false), and only after a rebuild, so the
+        editor reads them from disk: unused and just-dropped images show too.
+        """
+        if Path(url_path).suffix.lower() not in IMAGE_SUFFIXES:
+            return None
+        rel = url_path.lstrip('/')
+        if rel.startswith('images/'):
+            candidate = (self.root / 'static' / rel).resolve()
+            return candidate if candidate.is_relative_to(self.root / 'static' / 'images') and candidate.is_file() else None
+        folder, name = url_path.rsplit('/', 1)
+        for p in self.posts(max_age=5):
+            path = self.root / p['path']
+            if path.stem in ('index', '_index') and folder_of(p['url']) == folder + '/':
+                candidate = (path.parent / name).resolve()
+                if candidate.parent == path.parent and candidate.is_file():
+                    return candidate
+        return None
+
+    def delete_file(self, rel: str) -> None:
+        """Delete an image by its site-relative path (from library())."""
+        path = (self.root / rel).resolve()
+        inside = path.is_relative_to(self.content) or path.is_relative_to(self.root / 'static' / 'images')
+        if not inside or path.suffix.lower() not in IMAGE_SUFFIXES or not path.is_file():
+            raise SiteError(f'not an image of this site: {rel}')
+        path.unlink()
+
+    def rename_image(self, rel: str, name: str) -> dict:
+        """Give a post's image the next {slug}-NN name and update every post linking to it.
+
+        Returns the new name, the posts rewritten, and the ones that link to it but can't be
+        edited here (HTML content), which the caller should point out.
+        """
+        folder, prefix = self.image_target(rel)
+        old = folder / name
+        if not name or name != Path(name).name or old.suffix.lower() not in IMAGE_SUFFIXES or not old.is_file():
+            raise SiteError(f'no such image: {name}')
+        from .images import image_path            # avoid a cycle at import time
+        new = image_path(folder, '{slug}-{n}', self.image_slug(rel), name, old.suffix.lower())
+        before = next(i for i in self.library(only_post=rel) if i['name'] == name)
+        old.rename(new)
+        updated, skipped = [], []
+        for ref in before['refs']:
+            if not ref['editable']:
+                skipped.append(ref)
+                continue
+            path = self.root / ref['path']
+            text = path.read_text(encoding='utf-8')
+            if before['url']:
+                text = replace_links(text, before['url'], folder_of_url_join(before['url'], new.name))
+            if before['owner'] and before['owner']['path'] == ref['path']:
+                text = replace_links(text, prefix + name, prefix + new.name)
+            atomic_write(path, text.encode('utf-8'))
+            updated.append(ref['path'])
+        return {'name': new.name, 'updated': updated, 'skipped': skipped}
+
+
+def folder_of(url: str) -> str:
+    """Where Hugo publishes a bundle's files: /a/b/ for /a/b/, and /a/b/ for /a/b.html too."""
+    if not url:
+        return '/'
+    return url if url.endswith('/') else re.sub(r'\.[^/.]*$', '', url) + '/'
+
+
+def folder_of_url_join(url: str, name: str) -> str:
+    return url[:url.rfind('/') + 1] + name
+
+
+def _link_pattern(url: str) -> re.Pattern:
+    # (url), (url#right), "url", =url … but not "x-url" or "url2". A bare file name must not follow
+    # a "/" either: "/other-post/x.webp" is a different image than this bundle's "x.webp".
+    before = r'[\s("\'=]' if '/' not in url else r'[\s("\'/=]'
+    return re.compile(r'(^|' + before + ')' + re.escape(url) + r'(?=[)#\s"\'?]|$)', re.M)
+
+
+def links_to(text: str, url: str) -> bool:
+    return bool(_link_pattern(url).search(text))
+
+
+def replace_links(text: str, old: str, new: str) -> str:
+    return _link_pattern(old).sub(lambda m: m.group(1) + new, text)
 
 
 def quote(value: str) -> str:
