@@ -1,0 +1,13 @@
+{{- /* ![alt](image.webp#right): find the image among the post's own files, so Hugo publishes it
+       (publishResources = false leaves out the ones no post uses) and the link points to where it
+       is published. Hugo 0.148+ has an embedded hook that does the same: useEmbedded = 'fallback'. */ -}}
+{{- $u := urls.Parse .Destination -}}
+{{- $src := .Destination -}}
+{{- if not $u.IsAbs -}}
+  {{- with .Page.Resources.Get $u.Path -}}
+    {{- $src = .RelPermalink -}}
+    {{- with $u.Fragment }}{{ $src = printf "%s#%s" $src . }}{{ end -}}
+  {{- end -}}
+{{- end -}}
+<img src="{{ $src }}" alt="{{ .Text }}"{{ with .Title }} title="{{ . }}"{{ end }}>
+{{- /* chomp trailing newline */ -}}

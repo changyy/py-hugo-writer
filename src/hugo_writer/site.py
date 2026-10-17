@@ -17,6 +17,7 @@ from urllib.parse import urlsplit
 
 CONFIG_FILES = tuple(f'{base}.{ext}' for base in ('hugo', 'config') for ext in ('toml', 'yaml', 'yml', 'json'))
 EDITABLE_SUFFIXES = {'.md', '.markdown'}
+IMAGE_SUFFIXES = {'.webp', '.png', '.jpg', '.jpeg', '.gif', '.svg', '.avif'}
 SLUG = re.compile(r'^[a-z0-9][a-z0-9-]*$')
 # Raw HTML blocks the WYSIWYG editor would drop or mangle (embeds, tables, scripts, …).
 RAW_HTML = re.compile(r'^[ \t]*<(iframe|object|embed|video|audio|script|style|table|div|form)\b', re.M | re.I)
@@ -42,6 +43,8 @@ class Settings:
     # File name for dropped images: {slug} (the post's), {n} (01, 02, …), {original} (the file's own
     # name). The default keeps camera / screenshot names, which carry dates and more, off the site.
     image_name: str = '{slug}-{n}'
+    # Remove EXIF / XMP from images (GPS position, camera, time taken, …). False keeps EXIF.
+    strip_metadata: bool = True
 
     @classmethod
     def load(cls, root: Path) -> 'Settings':
@@ -163,6 +166,28 @@ class Site:
             return post.parent, ''
         folder = self.root / 'static' / 'images' / post.relative_to(self.content).with_suffix('')
         return folder, '/images/' + folder.relative_to(self.root / 'static' / 'images').as_posix() + '/'
+
+
+    def images(self, rel: str) -> list[dict]:
+        """The images stored for a post (its bundle folder, or static/images/<post path>/)."""
+        folder, prefix = self.image_target(rel)
+        if not folder.is_dir():
+            return []
+        found = []
+        for f in sorted(folder.iterdir()):
+            if f.is_file() and f.suffix.lower() in IMAGE_SUFFIXES:
+                st = f.stat()
+                found.append({'name': f.name, 'url': prefix + f.name, 'bytes': st.st_size, 'modified': st.st_mtime})
+        return found
+
+    def delete_image(self, rel: str, name: str) -> None:
+        folder, _ = self.image_target(rel)
+        if not name or name != Path(name).name or name.startswith('.'):
+            raise SiteError(f'not an image name: {name}')
+        path = folder / name
+        if path.suffix.lower() not in IMAGE_SUFFIXES or not path.is_file():
+            raise SiteError(f'no such image: {name}')
+        path.unlink()
 
 
 def quote(value: str) -> str:

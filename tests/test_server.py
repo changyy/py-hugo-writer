@@ -119,3 +119,14 @@ def test_image_width_picks_a_smaller_size_only(app):
                              {'X-Hugo-Writer': '1'})
         saved = app.site.root / json.loads(data)['file']
         assert Image.open(io.BytesIO(saved.read_bytes())).width == got
+
+
+def test_image_list_and_delete_api(app):
+    _, _, data = request(app, 'GET', f'/api/images?post={BUNDLE}')
+    assert [i['name'] for i in json.loads(data)['images']] == ['sample.webp']
+    body = json.dumps({'post': BUNDLE, 'name': 'sample.webp'})
+    assert request(app, 'POST', '/api/image/delete', body, {'Content-Type': 'application/json'})[0] == 403
+    assert request(app, 'POST', '/api/image/delete', body, WRITE)[0] == 200
+    assert request(app, 'POST', '/api/image/delete', json.dumps({'post': BUNDLE, 'name': 'index.md'}), WRITE)[0] == 400
+    _, _, data = request(app, 'GET', f'/api/images?post={BUNDLE}')
+    assert json.loads(data)['images'] == []

@@ -8,24 +8,47 @@ from PIL import Image, ImageOps
 MAX_UPLOAD = 50 * 1024 * 1024
 
 
-def process(data: bytes, filename: str, max_width: int, fmt: str, quality: int) -> tuple[bytes, str]:
-    """Return (image bytes, file extension).
+def metadata(img) -> list[str]:
+    """What an image carries about where, when, with what and by whom it was taken."""
+    exif = img.getexif()
+    sub = exif.get_ifd(0x8769)                                  # the Exif sub-IFD
+    found = []
+    if exif.get_ifd(0x8825):
+        found.append('gps')
+    if exif.get(0x010F) or exif.get(0x0110) or sub.get(0xA431) or sub.get(0xA434):
+        found.append('camera')                                  # make, model, body serial, lens
+    if exif.get(0x0132) or sub.get(0x9003) or sub.get(0x9004):
+        found.append('time')
+    if exif.get(0x013B) or exif.get(0x8298):
+        found.append('author')                                  # artist, copyright
+    if any('xmp' in str(key).lower() for key in img.info):
+        found.append('xmp')
+    if exif and not found:
+        found.append('exif')
+    return found
+
+
+def process(data: bytes, filename: str, max_width: int, fmt: str, quality: int,
+            strip: bool = True) -> tuple[bytes, str, list[str]]:
+    """Return (image bytes, file extension, metadata removed).
 
     Raster images wider than `max_width` are scaled down, then re-encoded as `fmt`.
-    Re-encoding drops EXIF, so camera GPS coordinates never reach the site.
+    Re-encoding drops EXIF and XMP (GPS position, camera, time taken, …) unless strip is False.
     SVGs and animated images are stored as they are.
     """
     if Path(filename).suffix.lower() == '.svg':
-        return data, '.svg'
+        return data, '.svg', []
     try:
         img = Image.open(io.BytesIO(data))
         img.load()
     except Exception as e:
         raise ValueError(f'not an image: {filename}') from e
     if getattr(img, 'is_animated', False):
-        return data, '.' + (img.format or 'gif').lower()
+        return data, '.' + (img.format or 'gif').lower(), []
 
-    img = ImageOps.exif_transpose(img)
+    found = metadata(img)
+    img = ImageOps.exif_transpose(img)                          # applies and drops the rotation tag
+    keep = {} if strip or not img.info.get('exif') else {'exif': img.info['exif']}
     if img.width > max_width:
         img = img.resize((max_width, max(1, round(img.height * max_width / img.width))), Image.LANCZOS)
 
@@ -39,8 +62,8 @@ def process(data: bytes, filename: str, max_width: int, fmt: str, quality: int) 
         has_alpha = img.mode in ('RGBA', 'LA') or (img.mode == 'P' and 'transparency' in img.info)
         img = img.convert('RGBA' if has_alpha else 'RGB')
     out = io.BytesIO()
-    img.save(out, fmt, quality=quality)
-    return out.getvalue(), ext
+    img.save(out, fmt, quality=quality, **keep)
+    return out.getvalue(), ext, (found if strip else [])
 
 
 def safe_stem(filename: str) -> str:

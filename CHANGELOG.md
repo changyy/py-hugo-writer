@@ -1,5 +1,17 @@
 # Changelog
 
+## 1.20261017.1093336
+
+- Drag images to move them in the WYSIWYG view (TOAST UI blocks this on its own); dropped at the start or
+  end of a paragraph an image becomes a paragraph of its own.
+- Click an image for Left / Center / Right / Default, kept as `#left` / `#center` / `#right` in its URL.
+- Files dropped in from outside go where they were dropped, not where the cursor was.
+- Image panel: the post's images with thumbnails, in use / unused, insert, delete, delete all unused.
+- The status line says what metadata a photo carried and was removed (GPS, camera, time, …);
+  `strip_metadata = false` keeps EXIF.
+- The open post stays in the address (`?open=…`), so a reload comes back to it.
+- Demo site: alignment CSS, `publishResources = false`, and its own image render hook (works on Hugo 0.128+).
+
 ## 1.20261017.1091404
 
 - Image size menu in the toolbar: Original (max 1024) | Large 512 | Medium 256 | Small 128. New images

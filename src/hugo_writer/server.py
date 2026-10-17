@@ -167,6 +167,14 @@ class Handler(BaseHTTPRequestHandler):
         data = json.loads(self._body())
         self._json({'text': self.server.site.set_draft(data['path'], bool(data['draft']))})
 
+    def list_images(self):
+        self._json({'images': self.server.site.images(self._query().get('post', ''))})
+
+    def delete_image(self):
+        data = json.loads(self._body())
+        self.server.site.delete_image(data.get('post', ''), data.get('name', ''))
+        self._json({'ok': True})
+
     def upload_image(self):
         q = self._query()
         site = self.server.site
@@ -175,14 +183,17 @@ class Handler(BaseHTTPRequestHandler):
         s = site.settings
         # ?width= picks a smaller size for this image (the editor's image size menu), never a larger one.
         width = min(int(q.get('width') or 0) or s.image_max_width, s.image_max_width)
-        data, ext = images.process(self._body(), name, width, s.image_format, s.image_quality)
+        data, ext, removed = images.process(self._body(), name, width, s.image_format, s.image_quality,
+                                            strip=s.strip_metadata)
         folder.mkdir(parents=True, exist_ok=True)
         path = images.image_path(folder, s.image_name, site.image_slug(q.get('post', '')), name, ext)
         atomic_write(path, data)
-        self._json({'url': prefix + path.name, 'file': path.relative_to(site.root).as_posix(), 'bytes': len(data)})
+        self._json({'url': prefix + path.name, 'file': path.relative_to(site.root).as_posix(), 'bytes': len(data),
+                    'removed': removed})
 
 
 GET_ROUTES = {'/': Handler.index, '/api/info': Handler.info, '/api/posts': Handler.list_posts,
-              '/api/post': Handler.get_post}
-POST_ROUTES = {'/api/post': Handler.create_post, '/api/draft': Handler.draft, '/api/image': Handler.upload_image}
+              '/api/post': Handler.get_post, '/api/images': Handler.list_images}
+POST_ROUTES = {'/api/post': Handler.create_post, '/api/draft': Handler.draft, '/api/image': Handler.upload_image,
+               '/api/image/delete': Handler.delete_image}
 PUT_ROUTES = {'/api/post': Handler.save_post}

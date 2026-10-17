@@ -132,3 +132,14 @@ def test_has_raw_html(text, expected):
 ])
 def test_front_matter_end(text, end):
     assert front_matter_end(text) == end
+
+
+def test_images_lists_and_deletes_only_image_files(site):
+    images = site.images(BUNDLE)
+    assert [i['name'] for i in images] == ['sample.webp'] and images[0]['url'] == 'sample.webp'
+    assert site.images(DRAFT) == []                         # no static/images/... folder yet
+    for bad in ('index.md', '../index.md', '.hidden.png', 'missing.webp', ''):
+        with pytest.raises(SiteError):
+            site.delete_image(BUNDLE, bad)
+    site.delete_image(BUNDLE, 'sample.webp')
+    assert site.images(BUNDLE) == [] and site.read(BUNDLE)   # the post itself is untouched

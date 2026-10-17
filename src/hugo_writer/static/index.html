@@ -72,6 +72,30 @@ main { display: flex; flex-direction: column; min-width: 0; min-height: 0; }
   padding: 10px 14px; background: var(--code); color: var(--text); font: 13px/1.55 var(--mono); }
 #wysiwyg { flex: 1; min-height: 0; }
 #wysiwyg .toastui-editor-defaultUI { border: 0; border-radius: 0; }
+/* Image alignment is kept in the URL fragment (#left / #center / #right); show it while editing. */
+#wysiwyg .toastui-editor-contents img[src$="#left"] { display: block; margin: 0 auto 0 0; }
+#wysiwyg .toastui-editor-contents img[src$="#center"] { display: block; margin: 0 auto; }
+#wysiwyg .toastui-editor-contents img[src$="#right"] { display: block; margin: 0 0 0 auto; }
+#wysiwyg .toastui-editor-contents img { cursor: grab; max-width: 100%; height: auto; }
+#wysiwyg .toastui-editor-contents img.ProseMirror-selectednode { outline: 2px solid var(--accent); }
+#images-panel { position: fixed; z-index: 30; top: 49px; right: 0; bottom: 0; width: min(340px, 90vw); display: flex; flex-direction: column;
+  background: var(--panel); border-left: 1px solid var(--border); box-shadow: -4px 0 12px rgb(0 0 0 / .08); }
+#images-panel header { display: flex; align-items: center; gap: 8px; padding: 10px 12px; border-bottom: 1px solid var(--border); }
+#images-panel header strong { flex: 1; }
+#images-panel .hint { padding: 8px 12px; font-size: 12px; color: var(--muted); border-bottom: 1px solid var(--border); }
+#images-list { list-style: none; margin: 0; padding: 0; overflow-y: auto; flex: 1; }
+#images-list li { display: grid; grid-template-columns: 72px 1fr; gap: 10px; padding: 10px 12px; border-bottom: 1px solid var(--border); }
+#images-list li.unused { background: var(--draft-bg); }
+#images-list img { width: 72px; height: 54px; object-fit: cover; border-radius: 4px; background: var(--code); }
+#images-list .name { font-size: 12px; word-break: break-all; }
+#images-list .meta { display: flex; gap: 6px; align-items: center; font-size: 11px; color: var(--muted); margin: 2px 0 6px; }
+#images-list .actions { display: flex; gap: 6px; }
+#images-list .actions button { padding: 2px 8px; font-size: 12px; }
+#images-list .empty-list { display: block; padding: 16px 12px; color: var(--muted); font-size: 13px; }
+#img-tools { position: fixed; z-index: 40; display: flex; gap: 2px; padding: 3px; border: 1px solid var(--border);
+  border-radius: 7px; background: var(--panel); box-shadow: 0 2px 8px rgb(0 0 0 / .15); }
+#img-tools button { padding: 3px 8px; font-size: 12px; }
+#img-tools button[aria-pressed=true] { background: var(--accent); color: var(--accent-text); border-color: var(--accent); }
 #source { flex: 1; width: 100%; resize: none; border: 0; outline: none; padding: 16px 20px; background: var(--panel); color: var(--text);
   font: 13px/1.6 var(--mono); tab-size: 4; }
 #source[readonly] { background: var(--code); }
@@ -131,6 +155,7 @@ dialog .actions { display: flex; justify-content: flex-end; gap: 8px; }
         <option value="256" data-i18n="sizeMedium"></option>
         <option value="128" data-i18n="sizeSmall"></option>
       </select></label>
+    <button id="images-btn" hidden></button>
     <a id="open-link" target="_blank" rel="noopener" hidden data-i18n="open"></a>
   </div>
   <div class="notice" id="notice" hidden></div>
@@ -144,6 +169,19 @@ dialog .actions { display: flex; justify-content: flex-end; gap: 8px; }
     <div id="preview-pane" hidden><div class="empty" id="preview-empty" data-i18n="noPreview"></div><iframe id="preview" hidden></iframe></div>
   </div>
 </main>
+
+<aside id="images-panel" hidden>
+  <header><strong data-i18n="imagesTitle"></strong><button id="delete-unused"></button><button id="images-close" aria-label="Close">✕</button></header>
+  <div class="hint" data-i18n="imagesHint"></div>
+  <ul id="images-list"></ul>
+</aside>
+
+<div id="img-tools" hidden role="toolbar">
+  <button data-align="left" data-i18n="alignLeft"></button>
+  <button data-align="center" data-i18n="alignCenter"></button>
+  <button data-align="right" data-i18n="alignRight"></button>
+  <button data-align="" data-i18n="alignDefault"></button>
+</div>
 
 <dialog id="new-dialog">
   <form method="dialog" id="new-form">
@@ -166,6 +204,12 @@ const I18N = {
     newPost: 'New post', search: 'Search titles', filterAll: 'All posts', filterDrafts: 'Drafts',
     filterPublished: 'Published', filterEditable: 'Markdown only', noPost: 'No post open', draft: 'Draft',
     viewWysiwyg: 'WYSIWYG', viewSource: 'Source', viewPreview: 'Hugo preview', split: 'Side-by-side preview',
+    images: 'Images ({n})', imagesTitle: 'Images in this post', inUse: 'in use', unused: 'unused', insert: 'Insert', remove: 'Delete',
+    deleteUnused: 'Delete unused ({n})', noImages: 'No images yet. Drop or paste one into the editor.',
+    imagesHint: 'Images you dropped in but no longer use are marked unused: delete them so they are not published.',
+    confirmDelete: 'Delete {name}?', confirmDeleteUsed: '{name} is used in this post and would show as a broken image. Delete anyway?',
+    confirmDeleteUnused: 'Delete {n} unused image(s)?\n\n{names}', deleted: 'Deleted {n} image(s)',
+    alignLeft: 'Left', alignCenter: 'Center', alignRight: 'Right', alignDefault: 'Default',
     imageSize: 'Images:', sizeOriginal: 'Original (max {max})', sizeLarge: 'Large 512', sizeMedium: 'Medium 256', sizeSmall: 'Small 128',
     open: 'Open ↗', noPreview: 'No preview', frontMatter: 'Front matter',
     empty: 'Pick a post on the left, or create a new one.<br>Switch between WYSIWYG, the source file and the Hugo preview at the top right.<br>Drop or paste images; they are resized and saved next to the post.',
@@ -175,12 +219,19 @@ const I18N = {
     hasHtml: 'This post contains HTML (embeds, tables, …). WYSIWYG may drop it, so it opens in the source view.',
     unsaved: 'Unsaved', saving: 'Saving…', saved: 'Saved {time}', saveFailed: 'Save failed: {error}',
     markedDraft: 'Marked as draft', markedPublished: 'Marked as published',
-    uploading: 'Uploading {name}…', imageSaved: 'Saved {file} ({kb} KB)', imageFailed: 'Image failed: {error}',
+    uploading: 'Uploading {name}…', imageSaved: 'Saved {file} ({kb} KB)', removedMeta: 'removed: {what}',
+    meta_gps: 'location (GPS)', meta_camera: 'camera', meta_time: 'time taken', meta_author: 'author', meta_xmp: 'XMP data', meta_exif: 'EXIF', imageFailed: 'Image failed: {error}',
   },
   'zh-TW': {
     newPost: '新增文章', search: '搜尋標題', filterAll: '全部文章', filterDrafts: '草稿',
     filterPublished: '已發布', filterEditable: '只看 Markdown', noPost: '尚未開啟文章', draft: '草稿',
     viewWysiwyg: '所見即所得', viewSource: '原始檔', viewPreview: 'Hugo 預覽', split: '並排預覽',
+    images: '圖片 ({n})', imagesTitle: '這篇文章的圖片', inUse: '使用中', unused: '未使用', insert: '插入', remove: '刪除',
+    deleteUnused: '刪除未使用 ({n})', noImages: '還沒有圖片。把圖片拖拉或貼進編輯器即可。',
+    imagesHint: '拖進來但已經沒用到的圖片會標示「未使用」，刪掉就不會被發布出去。',
+    confirmDelete: '刪除 {name}？', confirmDeleteUsed: '{name} 正在這篇文章裡使用，刪除後會變成破圖。確定要刪除嗎？',
+    confirmDeleteUnused: '刪除 {n} 張未使用的圖片？\n\n{names}', deleted: '已刪除 {n} 張圖片',
+    alignLeft: '靠左', alignCenter: '置中', alignRight: '靠右', alignDefault: '預設',
     imageSize: '圖片：', sizeOriginal: '原始（最寬 {max}）', sizeLarge: '大 512', sizeMedium: '中 256', sizeSmall: '小 128',
     open: '開新分頁 ↗', noPreview: '沒有預覽', frontMatter: '文章設定（front matter）',
     empty: '從左側挑一篇文章，或新增一篇。<br>右上角可切換：所見即所得、原始檔、Hugo 預覽。<br>拖拉或貼上圖片，會自動縮小並存在文章旁邊。',
@@ -190,7 +241,8 @@ const I18N = {
     hasHtml: '這篇文章含有 HTML（嵌入內容、表格等），所見即所得可能會把它們移除，因此以原始檔檢視開啟。',
     unsaved: '尚未儲存', saving: '儲存中…', saved: '已儲存 {time}', saveFailed: '儲存失敗：{error}',
     markedDraft: '已設為草稿', markedPublished: '已設為發布',
-    uploading: '上傳 {name} 中…', imageSaved: '已儲存 {file}（{kb} KB）', imageFailed: '圖片失敗：{error}',
+    uploading: '上傳 {name} 中…', imageSaved: '已儲存 {file}（{kb} KB）', removedMeta: '已移除：{what}',
+    meta_gps: '拍攝地點（GPS）', meta_camera: '相機', meta_time: '拍攝時間', meta_author: '作者', meta_xmp: 'XMP 資訊', meta_exif: 'EXIF', imageFailed: '圖片失敗：{error}',
   },
 };
 
@@ -276,14 +328,139 @@ const editor = new toastui.Editor({
   language: LANG === 'zh-TW' ? 'zh-TW' : 'en-US',
   hooks: {
     addImageBlobHook: (blob, done) => {
+      // Where it goes: where a file was dropped, or the cursor (paste, the image button).
+      const pos = state.dropPos ?? pm.state.selection.from;
+      state.dropPos = null;
       // Insert only once the preview serves the new file: inserted any earlier, the browser
       // gets a 404 while hugo is still picking the file up and keeps showing a broken image.
-      uploadImage(blob).then(async r => { if (r) { await imageReady(r.url); done(r.url, imageAlt()); } });
+      uploadImage(blob).then(async r => {
+        if (!r) return;
+        await imageReady(r.url);
+        const image = pm.state.schema.nodes.image.create({ imageUrl: r.url, altText: imageAlt() });
+        const tr = pm.state.tr;
+        placeImage(tr, Math.min(pos, tr.doc.content.size), image);
+        pm.dispatch(tr.scrollIntoView());
+      });
       return false;
     },
   },
 });
 editor.on('change', () => { if (!state.loading) changed(); });
+
+// -- images inside the WYSIWYG view: drag to move, align ---------------------
+// TOAST UI 3.2.2 defines images as neither selectable nor draggable; ProseMirror reads these
+// flags from the node spec at run time, so turning them on lets you drag an image elsewhere.
+const pm = editor.wwEditor.view;
+Object.assign(pm.state.schema.nodes.image.spec, { selectable: true, draggable: true });
+
+// Its image node view also tells ProseMirror to ignore every event on an image (stopEvent: true),
+// so a drag never starts. Let drag events through; everything else (e.g. image links) stays as is.
+function letImagesDrag(target) {
+  const view = target && target.tagName === 'IMG' && target.pmViewDesc && target.pmViewDesc.spec;
+  const proto = view && Object.getPrototypeOf(view);
+  if (!proto || proto.hugoWriterDrag) return;
+  const stopEvent = proto.stopEvent;
+  proto.stopEvent = function (event) { return /^drag|^drop$/.test(event.type) ? false : stopEvent.call(this, event); };
+  proto.hugoWriterDrag = true;
+}
+['mousedown', 'dragstart'].forEach(type => $('wysiwyg').addEventListener(type, e => letImagesDrag(e.target), true));
+
+const ALIGN = /#(left|center|right)$/;
+let toolsFor = null;   // { pos, dom } of the image the alignment tools belong to
+
+function imageAt(dom) {
+  // The image node's position in the document, found from its <img>.
+  for (const pos of [pm.posAtDOM(dom, 0), pm.posAtDOM(dom, 0) - 1]) {
+    const node = pos >= 0 && pm.state.doc.nodeAt(pos);
+    if (node && node.type.name === 'image') return { pos, node };
+  }
+  return null;
+}
+
+function showImageTools(dom) {
+  const found = imageAt(dom);
+  if (!found) return hideImageTools();
+  toolsFor = { pos: found.pos, dom };
+  const align = (found.node.attrs.imageUrl.match(ALIGN) || [])[1] || '';
+  document.querySelectorAll('#img-tools button').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.align === align)));
+  const box = dom.getBoundingClientRect(), tools = $('img-tools');
+  tools.hidden = false;
+  tools.style.top = Math.max(8, box.top - tools.offsetHeight - 6) + 'px';
+  tools.style.left = Math.max(8, Math.min(box.left, innerWidth - tools.offsetWidth - 8)) + 'px';
+}
+function hideImageTools() { $('img-tools').hidden = true; toolsFor = null; }
+
+function alignImage(align) {
+  const found = toolsFor && imageAt(toolsFor.dom);
+  if (!found) return hideImageTools();
+  const url = found.node.attrs.imageUrl.replace(ALIGN, '') + (align ? '#' + align : '');
+  pm.dispatch(pm.state.tr.setNodeMarkup(found.pos, undefined, { ...found.node.attrs, imageUrl: url }));
+  hideImageTools();
+}
+
+// TOAST UI keeps each blank line of the Markdown as an empty paragraph between blocks:
+// "a", "", "![](x)", "", "b". Placing or moving an image adds or removes those separators with it.
+const isBlank = node => node && node.type.name === 'paragraph' && node.content.size === 0;
+
+// Put an image node at pos: on a blank line or at the start / end of a paragraph it becomes a
+// paragraph of its own (with blank lines around); inside text it goes into the text.
+function placeImage(tr, pos, image) {
+  const { paragraph } = pm.state.schema.nodes;
+  const $pos = tr.doc.resolve(pos), block = $pos.parent;
+  const own = () => paragraph.create(null, image);
+  if (!block.isTextblock || $pos.depth === 0) tr.insert(pos, own());
+  else if (isBlank(block)) tr.insert($pos.after(), [own(), paragraph.create()]);
+  else if ($pos.parentOffset === 0) tr.insert($pos.before(), [own(), paragraph.create()]);
+  else if ($pos.parentOffset === block.content.size) tr.insert($pos.after(), [paragraph.create(), own()]);
+  else tr.insert(pos, image);
+}
+
+// Files dropped from outside are uploaded by TOAST UI's hook; remember where they were dropped.
+$('wysiwyg').addEventListener('drop', e => {
+  if (pm.dragging || !e.dataTransfer?.files?.length) return;
+  const at = pm.posAtCoords({ left: e.clientX, top: e.clientY });
+  state.dropPos = at ? at.pos : null;
+}, true);
+
+// TOAST UI's own drop handler claims every drop (to upload dragged-in image files), so ProseMirror
+// never gets to move what you drag inside the editor; worse, Chrome attaches a dragged <img> as a
+// file, which TOAST UI would upload again. Moves inside the editor are handled here, first.
+$('wysiwyg').addEventListener('drop', e => {
+  const drag = pm.dragging;                       // set by ProseMirror when a drag starts inside it
+  if (!drag || !pm.dom.contains(e.target)) return;  // a file from outside: TOAST UI uploads it
+  e.preventDefault();
+  e.stopPropagation();
+  pm.dragging = null;
+  const at = pm.posAtCoords({ left: e.clientX, top: e.clientY });
+  if (!at) return;
+  const tr = pm.state.tr;
+  if (drag.move) {
+    const from = pm.state.selection.from;
+    tr.deleteSelection();
+    // The image's own paragraph is now empty: remove it and one blank line next to it, or the two
+    // left side by side would be saved as a <br>.
+    const $from = tr.doc.resolve(tr.mapping.map(from));
+    if ($from.depth > 0 && isBlank($from.parent)) {
+      const start = $from.before(), end = $from.after();
+      const parent = $from.node($from.depth - 1), index = $from.index($from.depth - 1);
+      const prev = index > 0 ? parent.child(index - 1) : null;
+      const next = index + 1 < parent.childCount ? parent.child(index + 1) : null;
+      if (isBlank(next)) tr.delete(start, end + next.nodeSize);
+      else if (isBlank(prev)) tr.delete(start - prev.nodeSize, end);
+      else tr.delete(start, end);
+    }
+  }
+  const pos = tr.mapping.map(at.pos), content = drag.slice.content;
+  if (content.childCount === 1 && content.firstChild.type.name === 'image') placeImage(tr, pos, content.firstChild);
+  else tr.replaceRange(pos, pos, drag.slice);
+  pm.dispatch(tr.scrollIntoView());
+  pm.focus();
+}, true);
+
+pm.dom.addEventListener('click', e => { e.target.tagName === 'IMG' ? showImageTools(e.target) : hideImageTools(); });
+pm.dom.addEventListener('dragstart', hideImageTools);
+$('wysiwyg').addEventListener('scroll', hideImageTools, true);
+document.querySelectorAll('#img-tools button').forEach(b => { b.onmousedown = e => e.preventDefault(); b.onclick = () => alignImage(b.dataset.align); });
 
 function setEditorBody(body) {
   state.loading = true;
@@ -399,6 +576,13 @@ async function openPost(path) {
   showPreview(meta.url);
   layout();
   renderList();
+  loadImages();
+  // Keep the open post in the address, so a reload (or a bookmark) comes back to it.
+  const address = new URL(location.href);
+  address.searchParams.set('open', path);
+  address.searchParams.delete('view');
+  history.replaceState(null, '', address);
+  document.title = `${meta.title || path} · ${state.info?.name || 'hugo-writer'}`;
   if (post.editable && state.view === 'wysiwyg') editor.moveCursorToStart(true);
 }
 
@@ -412,6 +596,7 @@ function showPreview(url) {
 
 function changed() {
   if (!state.current?.editable) return;
+  if (!$('images-panel').hidden) renderImages();
   state.dirty = true; status(t('unsaved'));
   clearTimeout(state.timer);
   state.timer = setTimeout(save, 1000);
@@ -475,7 +660,10 @@ async function uploadImage(file) {
     status(t('uploading', { name }));
     const width = $('imgsize').value;
     const res = await api('POST', `/api/image?post=${encodeURIComponent(state.current.path)}&name=${encodeURIComponent(name)}&width=${width}`, file, true);
-    status(t('imageSaved', { file: res.file, kb: Math.round(res.bytes / 1024) }));
+    // Say what the photo gave away and is now gone, e.g. "removed: location (GPS), camera".
+    const removed = (res.removed || []).map(k => t('meta_' + k)).join(LANG === 'zh-TW' ? '、' : ', ');
+    status(t('imageSaved', { file: res.file, kb: Math.round(res.bytes / 1024) }) + (removed ? ' · ' + t('removedMeta', { what: removed }) : ''));
+    loadImages();
     return res;
   } catch (e) { status(t('imageFailed', { error: e.message }), true); return null; }
 }
@@ -491,6 +679,88 @@ async function sourceImages(files) {
   }
 }
 const imageFiles = list => [...list].filter(f => f && f.type.startsWith('image/'));
+
+// -- the post's images: which are used, delete the rest ----------------------
+
+state.images = [];
+
+// Whether the text links to url: (url), (url#right), "url", =url …, but not "x-url" or "url2".
+function linksTo(text, url) {
+  const esc = url.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  return new RegExp(`(^|[\\s("'/=])${esc}(?=[)#\\s"'?]|$)`).test(text);
+}
+
+async function loadImages() {
+  const post = state.current;
+  state.images = post?.editable ? (await api('GET', '/api/images?post=' + encodeURIComponent(post.path))).images : [];
+  if (state.current === post) renderImages();
+}
+
+function renderImages() {
+  const editable = !!state.current?.editable;
+  const text = editable ? currentText() : '';
+  const images = state.images.map(i => ({ ...i, used: linksTo(text, i.url) }));
+  const unused = images.filter(i => !i.used);
+  $('images-btn').hidden = !editable;
+  $('images-btn').textContent = t('images', { n: images.length });
+  $('delete-unused').textContent = t('deleteUnused', { n: unused.length });
+  $('delete-unused').disabled = !unused.length;
+  if (!editable) $('images-panel').hidden = true;
+  if (!images.length) {
+    const li = document.createElement('li'); li.className = 'empty-list'; li.textContent = t('noImages');
+    $('images-list').replaceChildren(li);
+    return;
+  }
+  $('images-list').replaceChildren(...images.map(i => {
+    const li = document.createElement('li');
+    li.className = i.used ? '' : 'unused';
+    const thumb = document.createElement('img'); thumb.src = i.url; thumb.alt = ''; thumb.loading = 'lazy';
+    const info = document.createElement('div');
+    const name = document.createElement('div'); name.className = 'name'; name.textContent = i.name;
+    const meta = document.createElement('div'); meta.className = 'meta';
+    const badge = document.createElement('span'); badge.className = i.used ? 'badge ro' : 'badge'; badge.textContent = t(i.used ? 'inUse' : 'unused');
+    meta.append(`${Math.max(1, Math.round(i.bytes / 1024))} KB`, badge);
+    const actions = document.createElement('div'); actions.className = 'actions';
+    const insert = document.createElement('button'); insert.textContent = t('insert'); insert.onclick = () => insertImage(i.url);
+    const del = document.createElement('button'); del.textContent = t('remove'); del.onclick = () => deleteImages([i]);
+    actions.append(insert, del);
+    info.append(name, meta, actions);
+    li.append(thumb, info);
+    return li;
+  }));
+}
+
+function insertImage(url) {
+  if (state.view === 'source') {
+    const ta = $('source');
+    ta.setRangeText(`![${imageAlt()}](${url})\n`, ta.selectionStart, ta.selectionEnd, 'end');
+    changed();
+  } else {
+    const tr = pm.state.tr;
+    placeImage(tr, pm.state.selection.from, pm.state.schema.nodes.image.create({ imageUrl: url, altText: imageAlt() }));
+    pm.dispatch(tr.scrollIntoView());
+  }
+  renderImages();
+}
+
+async function deleteImages(images) {
+  const text = currentText();
+  if (images.length === 1) {
+    const [i] = images;
+    if (!confirm(t(linksTo(text, i.url) ? 'confirmDeleteUsed' : 'confirmDelete', { name: i.name }))) return;
+  } else if (!confirm(t('confirmDeleteUnused', { n: images.length, names: images.map(i => i.name).join('\n') }))) {
+    return;
+  }
+  try {
+    for (const i of images) await api('POST', '/api/image/delete', { post: state.current.path, name: i.name });
+    status(t('deleted', { n: images.length }));
+  } catch (e) { status(e.message, true); }
+  await loadImages();
+}
+
+$('images-btn').onclick = () => { $('images-panel').hidden = !$('images-panel').hidden; if (!$('images-panel').hidden) loadImages(); };
+$('images-close').onclick = () => { $('images-panel').hidden = true; };
+$('delete-unused').onclick = () => deleteImages(state.images.filter(i => !linksTo(currentText(), i.url)));
 
 // -- new post -----------------------------------------------------------------
 

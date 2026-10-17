@@ -29,9 +29,11 @@ to your content folder. No server to host, no account, no database — just your
 | 3 | Side-by-side preview while you write | the preview reloads on every save |
 | 4 | Markdown throughout: code fences, tables, lists, links | posts stay plain `.md` files |
 | 5 | Drafts | new posts start as drafts; one checkbox flips `draft` in the front matter |
-| 6 | Drop or paste images (screenshots too) | scaled to 1024 px wide, re-encoded as WebP, EXIF (GPS) stripped, named after the post, saved next to it |
-| 7 | Autosave | a second after you stop typing, or ⌘S / Ctrl+S |
-| 8 | English and Traditional Chinese UI | follows the browser language; switch at the bottom left |
+| 6 | Drop or paste images (screenshots too) | scaled to 1024 px (or 512 / 256 / 128), re-encoded as WebP, EXIF / GPS removed (and reported), named after the post, saved next to it |
+| 7 | Move and align images in the WYSIWYG view | drag an image elsewhere; click it for Left / Center / Right |
+| 8 | Image panel per post | thumbnails, in use / unused, insert again, delete what you no longer use |
+| 9 | Autosave, and the open post stays in the address | a second after you stop typing, or ⌘S / Ctrl+S; reloading comes back to the same post |
+| 10 | English and Traditional Chinese UI | follows the browser language; switch at the bottom left |
 
 Only Markdown posts are editable. Other content files (HTML, Org, …) are listed and
 shown read-only, so a migrated archive can sit next to new posts safely. Markdown posts
@@ -105,6 +107,42 @@ The original file name is not used, nor put in the alt text (which starts as the
 title): names like `Screenshot 2026-10-17 at 08.58.07.png` give away when, and often
 what, you captured. Set `image_name = "{original}"` to keep the original names.
 
+EXIF and XMP are removed too — GPS position, camera and serial number, time taken,
+author — and the status line says what a photo carried, e.g. *removed: location (GPS),
+camera, time taken*. Set `strip_metadata = false` to keep EXIF. What is *in* the picture
+(an e-mail address in a screenshot, a face) is up to you.
+
+#### Moving and aligning
+
+In the WYSIWYG view, drag an image to move it: dropped at the start or end of a
+paragraph it becomes a paragraph of its own, dropped inside text it goes into the text.
+Click an image for **Left / Center / Right / Default**. Markdown has no alignment
+syntax, so it is kept in the URL fragment, `![](photo.webp#right)`, and the site's CSS
+does the rest:
+
+```css
+img[src$="#left"]   { display: block; margin: 0 auto 0 0; }
+img[src$="#center"] { display: block; margin: 0 auto; }
+img[src$="#right"]  { display: block; margin: 0 0 0 auto; }
+```
+
+#### The image panel, and not publishing unused images
+
+**Images (n)** in the toolbar lists the post's images with thumbnails, marks the ones
+the post no longer links to as *unused* (unsaved edits included), and deletes them one by
+one or all at once. Hugo publishes every file in a page bundle by default; to publish
+only the images a post uses, even when one is left behind, add:
+
+```toml
+[[cascade]]
+  [cascade.build]
+    publishResources = false
+```
+
+This needs an image render hook, so that Hugo looks the images up as page resources:
+`useEmbedded = 'fallback'` on Hugo 0.148+ (below), or a hook of your own like
+[the demo site's](./examples/demo-site/layouts/_default/_markup/render-image.html).
+
 The **Images** menu in the toolbar picks the width new images are saved at: Original
 (`image_max_width`, 1024 by default), Large 512, Medium 256 or Small 128. Markdown has no
 size syntax, so the file itself is that size and shows at that width (a small image looks
@@ -133,6 +171,7 @@ image_max_width = 1024
 image_format = "webp"                  # or "jpeg", "png"
 image_quality = 82
 image_name = "{slug}-{n}"              # {slug}, {n} (01, 02, …), {original} (the uploaded file's name)
+strip_metadata = true                  # false keeps EXIF (camera, GPS, …) in uploaded images
 ```
 
 `{year}`, `{month}`, `{day}` and `{slug}` are filled in when the post is created.

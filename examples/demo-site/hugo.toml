@@ -5,9 +5,9 @@ baseURL = 'https://demo.example.org/'
 title = 'hugo-writer demo'
 
 # Page bundles published at url: /YYYY/MM/slug.html keep their images in /YYYY/MM/slug/;
-# the embedded image render hook rewrites ![](image.webp) to that real path.
-[markup.goldmark.renderHooks.image]
-  useEmbedded = 'fallback'
+# layouts/_default/_markup/render-image.html rewrites ![](image.webp) to that real path.
+# (On Hugo 0.148+ the embedded hook can do it instead: [markup.goldmark.renderHooks.image]
+#  useEmbedded = 'fallback'.)
 
 # content/posts/2010/01/legacy.html is an HTML content file, which newer Hugo only reads when allowed.
 [security]
@@ -16,3 +16,8 @@ title = 'hugo-writer demo'
 # with-embed.md keeps an <iframe> in Markdown
 [markup.goldmark.renderer]
   unsafe = true
+
+# Publish only the images a post actually uses: ones dropped in and then left out never go live.
+[[cascade]]
+  [cascade.build]
+    publishResources = false
