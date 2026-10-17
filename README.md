@@ -95,6 +95,10 @@ interfere with a `hugo server` you already run), then opens the editor at
 - **Hugo preview** shows the page exactly as your theme renders it. Tick
   *Side-by-side preview* to keep it next to the WYSIWYG or source view.
 - Untick **Draft** when the post is ready; your next `hugo` build publishes it.
+- Editing the same post elsewhere too (another editor, an AI tool, `git pull`)? Saves never
+  overwrite a file that changed on disk since it was opened: autosave pauses and asks whether to
+  load the file or keep your version. With no unsaved edits, coming back to the window simply loads
+  the file again.
 
 ### 3. Title, URL and featured image
 
@@ -103,6 +107,9 @@ Hugo's permalinks decide — changing it on a published post asks first, since o
 break) and its **featured image**: none, one of the post's images, or one you upload just
 for that (it is not inserted into the text). By default the first image dropped into a post
 without one becomes it.
+
+If the site's settings give new posts a `url` but this post has none (say a tool swapped it for
+`slug`), a note under the URL field says so and shows where Hugo will publish it.
 
 The featured image goes to the front matter key in `featured_field`: `images` by default
 (Hugo's own, read by its Open Graph and Twitter templates), `cover.image` for PaperMod, or

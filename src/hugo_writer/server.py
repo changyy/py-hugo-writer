@@ -11,7 +11,7 @@ from urllib.parse import parse_qs, urlsplit
 
 from . import images
 from ._version import __version__
-from .site import SiteError, atomic_write, get_featured, has_raw_html
+from .site import Conflict, SiteError, atomic_write, front_matter, get_featured, has_raw_html, version
 
 # Every request that changes files must carry this header. A web page on another
 # origin can't add a custom header without a CORS preflight, which we never grant,
@@ -86,6 +86,8 @@ class Handler(BaseHTTPRequestHandler):
             return self._error(HTTPStatus.NOT_FOUND, 'not found')
         try:
             route(self)
+        except Conflict as e:
+            self._error(HTTPStatus.CONFLICT, str(e))
         except SiteError as e:
             self._error(HTTPStatus.BAD_REQUEST, str(e))
         except ValueError as e:
@@ -159,31 +161,42 @@ class Handler(BaseHTTPRequestHandler):
         site = self.server.site
         text = site.read(rel)
         editable = site.resolve(rel).suffix.lower() in ('.md', '.markdown')
+        front = self._front(text) if editable else {'featured': None, 'front_title': None, 'front_url': None}
+        # url: the permalink right now, so a post whose url / slug changed elsewhere previews where it lives.
+        self._json({'path': rel, 'text': text, 'editable': editable, 'has_html': editable and has_raw_html(text),
+                    'version': version(text), 'url': site.url_of(rel), **front})
+
+    def _front(self, text: str) -> dict:
         front = {}
-        for name, key in (('featured', site.settings.featured_field), ('front_title', 'title'), ('front_url', 'url')):
+        for name, key in (('featured', self.server.site.settings.featured_field), ('front_title', 'title'), ('front_url', 'url')):
             try:
-                front[name] = get_featured(text, key) if editable else None
+                front[name] = get_featured(text, key)
             except (SiteError, ValueError):
                 front[name] = None
-        self._json({'path': rel, 'text': text, 'editable': editable, 'has_html': editable and has_raw_html(text),
-                    **front})
+        return front
 
     def set_featured(self):
         data, site = json.loads(self._body()), self.server.site
         text = site.set_featured(data.get('path', ''), data.get('image') or None)
-        self._json({'text': text, 'featured': site.featured(data.get('path', ''))})
+        self._json({'text': text, 'version': version(text), 'featured': site.featured(data.get('path', ''))})
 
     def set_front(self):
-        # {path, field: title | url | featured, value}
+        # {path, field: title | url | featured, value, version}
         data, site = json.loads(self._body()), self.server.site
         rel = data.get('path', '')
-        text = site.set_front(rel, data.get('field', ''), data.get('value'))
-        self._json({'text': text, 'featured': site.featured(rel)})
+        text = site.set_front(rel, data.get('field', ''), data.get('value'), data.get('version'))
+        self._json({'text': text, 'version': version(text), 'featured': site.featured(rel)})
 
     def save_post(self):
-        data = json.loads(self._body())
-        self.server.site.write(data['path'], data['text'])
-        self._json({'ok': True})
+        # {path, text, version}: version is what the editor loaded; a different file on disk is a 409.
+        data, site = json.loads(self._body()), self.server.site
+        rel, text = data['path'], data['text']
+        before = site.read(rel)
+        site.write(rel, text, data.get('version'))
+        res = {'ok': True, 'version': version(text)}
+        if front_matter(before) != front_matter(text):     # url, slug, date … may move the page
+            res.update(self._front(text), url=site.url_of(rel))
+        self._json(res)
 
     def create_post(self):
         data = json.loads(self._body())
@@ -195,7 +208,8 @@ class Handler(BaseHTTPRequestHandler):
 
     def draft(self):
         data = json.loads(self._body())
-        self._json({'text': self.server.site.set_draft(data['path'], bool(data['draft']))})
+        text = self.server.site.set_draft(data['path'], bool(data['draft']), data.get('version'))
+        self._json({'text': text, 'version': version(text)})
 
     def list_images(self):
         self._json({'images': self.server.site.images(self._query().get('post', ''))})

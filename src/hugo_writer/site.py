@@ -4,6 +4,7 @@ Listing goes through `hugo list all`, so Hugo itself parses every front matter
 format (YAML, TOML, JSON) and computes permalinks; this module never has to.
 """
 import csv
+import hashlib
 import io
 import json
 import os
@@ -28,6 +29,10 @@ FRONT_MATTER = re.compile(r'\A(---|\+\+\+)[ \t]*\n(.*?)\n?^\1[ \t]*$', re.S | re
 
 class SiteError(Exception):
     """Something the user should see: a bad path, a hugo failure, an invalid slug."""
+
+
+class Conflict(SiteError):
+    """The post changed on disk (another editor, an AI tool, git) since the editor opened it."""
 
 
 @dataclass
@@ -121,6 +126,7 @@ class Site:
         cached = getattr(self, '_posts', None)
         if max_age and cached and time.monotonic() - cached[0] < max_age:
             return cached[1]
+        listed_at = time.time()
         out = self._list()
         if out.returncode != 0:
             raise SiteError(out.stderr.strip() or 'hugo list all failed')
@@ -138,8 +144,15 @@ class Site:
                 'editable': Path(row['path']).suffix.lower() in EDITABLE_SUFFIXES,
             })
         posts.sort(key=lambda p: p['date'], reverse=True)
-        self._posts = (time.monotonic(), posts)
+        self._posts = (time.monotonic(), posts, listed_at)
         return posts
+
+    def url_of(self, rel: str) -> str:
+        """Where Hugo publishes the post now: re-lists the site only if the file changed since the last listing."""
+        cached = getattr(self, '_posts', None)
+        fresh = cached and self.resolve(rel).stat().st_mtime < cached[2]
+        posts = cached[1] if fresh else self.posts()
+        return next((p['url'] for p in posts if p['path'] == rel), '')
 
     _list_flags = ['--noBuildLock']
 
@@ -169,7 +182,13 @@ class Site:
             raise SiteError(f'no such post: {rel}')
         return path.read_text(encoding='utf-8')
 
-    def write(self, rel: str, text: str) -> None:
+    def check(self, rel: str, expect: str | None) -> None:
+        """Raise Conflict if the post is no longer the version the editor loaded (None: don't check)."""
+        if expect and version(self.read(rel)) != expect:
+            raise Conflict('the post changed on disk since it was opened')
+
+    def write(self, rel: str, text: str, expect: str | None = None) -> None:
+        self.check(rel, expect)
         path = self.resolve(rel)
         if path.suffix.lower() not in EDITABLE_SUFFIXES:
             raise SiteError(f'only Markdown posts can be edited: {rel}')
@@ -177,7 +196,8 @@ class Site:
             raise SiteError(f'no such post: {rel}')
         atomic_write(path, text.encode('utf-8'))
 
-    def set_draft(self, rel: str, draft: bool) -> str:
+    def set_draft(self, rel: str, draft: bool, expect: str | None = None) -> str:
+        self.check(rel, expect)
         text = set_draft(self.read(rel), draft)
         self.write(rel, text)
         return text
@@ -189,7 +209,7 @@ class Site:
         """Set (or with None, remove) the post's featured image in its front matter."""
         return self.set_front(rel, 'featured', image)
 
-    def set_front(self, rel: str, field: str, value: str | None) -> str:
+    def set_front(self, rel: str, field: str, value: str | None, expect: str | None = None) -> str:
         """Set one of the post's settings in its front matter: title, url or featured (image).
 
         An empty url or featured removes the key (Hugo's permalinks / no image); a title can't be empty.
@@ -209,6 +229,7 @@ class Site:
             key = self.settings.featured_field
         else:
             raise SiteError(f'unknown post setting: {field}')
+        self.check(rel, expect)
         text = set_featured(self.read(rel), key, value)
         self.write(rel, text)
         return text
@@ -656,6 +677,15 @@ def front_matter_end(text: str) -> int:
             if depth == 0:
                 return i + 1
     return 0
+
+
+def version(text: str) -> str:
+    """A post's version for the editor: by content, so rewriting the same bytes (a touch) isn't a change."""
+    return hashlib.sha256(text.encode('utf-8')).hexdigest()[:16]
+
+
+def front_matter(text: str) -> str:
+    return text[:front_matter_end(text)]
 
 
 def has_raw_html(text: str) -> bool:

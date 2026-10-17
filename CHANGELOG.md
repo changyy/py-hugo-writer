@@ -1,5 +1,17 @@
 # Changelog
 
+## 1.20261017.1220639
+
+- Edits made elsewhere (another editor, an AI tool, git) are no longer overwritten: every save carries
+  the version it was based on, and if the file changed on disk, autosave pauses and asks whether to
+  load the file or keep your version. Coming back to the window loads outside changes when there are
+  no unsaved edits here.
+- Fix: after a post's `url` / `slug` changed outside the editor, the Hugo preview kept opening the old
+  address (an empty page `hugo server` still had in memory). Opening a post, and saving a change to
+  its front matter, now use the permalink Hugo gives it at that moment.
+- The URL field notes when the site's new posts get a `url` (setting `url`) but this post has none,
+  and where Hugo will publish it instead.
+
 ## 1.20261017.1114705
 
 - Post info above the editor: title, URL and featured image (none, one of the post's images, or an

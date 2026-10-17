@@ -1,9 +1,10 @@
 import os
+import time
 from datetime import datetime, timezone
 
 import pytest
 
-from hugo_writer.site import Settings, Site, SiteError, front_matter_end, has_raw_html, set_draft
+from hugo_writer.site import Conflict, Settings, Site, SiteError, front_matter_end, has_raw_html, set_draft, version
 
 from .conftest import BUNDLE, DRAFT, HUGO, LEGACY, needs_hugo
 
@@ -111,6 +112,32 @@ def test_posts_lists_every_page_with_hugos_metadata(site):
     assert new['draft'] is True and new['url'] == '/2026/10/brand-new.html'
     listed = [p['date'] for p in site.posts()]
     assert listed == sorted(listed, reverse=True)
+
+
+@needs_hugo
+def test_url_of_follows_a_front_matter_change_made_elsewhere(site):
+    assert site.url_of(BUNDLE) == '/2024/05/hello-markdown.html'
+    # Another tool swaps url: for slug: after the listing was cached.
+    path = site.resolve(BUNDLE)
+    text = path.read_text().replace('url: /2024/05/hello-markdown.html', 'slug: renamed')
+    time.sleep(0.01)
+    path.write_text(text)
+    assert site.url_of(BUNDLE) == '/posts/2024/05/renamed/'
+
+
+def test_write_refuses_a_post_changed_since_it_was_read(site):
+    loaded = version(site.read(BUNDLE))
+    site.write(BUNDLE, site.read(BUNDLE), loaded)             # unchanged: fine
+    site.resolve(BUNDLE).write_text('changed elsewhere\n')
+    with pytest.raises(Conflict):
+        site.write(BUNDLE, 'mine\n', loaded)
+    with pytest.raises(Conflict):
+        site.set_draft(BUNDLE, True, loaded)
+    with pytest.raises(Conflict):
+        site.set_front(BUNDLE, 'title', 'x', loaded)
+    assert site.read(BUNDLE) == 'changed elsewhere\n'
+    site.write(BUNDLE, 'mine\n')                              # no version: overwrite, as before
+    assert site.read(BUNDLE) == 'mine\n'
 
 
 @pytest.mark.parametrize('text, expected', [

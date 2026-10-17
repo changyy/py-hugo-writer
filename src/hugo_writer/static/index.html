@@ -83,6 +83,7 @@ main { display: flex; flex-direction: column; min-width: 0; min-height: 0; }
 .toolbar label { display: flex; align-items: center; gap: 4px; white-space: nowrap; }
 #status { color: var(--muted); font-size: 12px; white-space: nowrap; }
 #status.err { color: var(--danger); }
+#status.conflict { cursor: pointer; text-decoration: underline; }
 .views { display: inline-flex; border: 1px solid var(--border); border-radius: 7px; overflow: hidden; }
 .views button { border: 0; border-radius: 0; border-right: 1px solid var(--border); }
 .views button:last-child { border-right: 0; }
@@ -99,6 +100,7 @@ main { display: flex; flex-direction: column; min-width: 0; min-height: 0; }
 #post-info .featured { grid-column: 2 / -1; display: flex; gap: 8px; align-items: center; min-width: 0; }
 #post-info .featured select { min-width: 0; max-width: 360px; }
 #post-info .featured img { width: 48px; height: 36px; object-fit: cover; border-radius: 3px; background: var(--code); }
+#post-info .hint { grid-column: 1 / -1; color: var(--draft); font-size: 12px; }
 @media (max-width: 900px) { #post-info { grid-template-columns: auto 1fr; } #post-info .featured { grid-column: 2; } }
 #front { border-bottom: 1px solid var(--border); }
 #front summary { padding: 6px 12px; cursor: pointer; color: var(--muted); font-size: 12px; user-select: none; }
@@ -161,6 +163,7 @@ dialog input { width: 100%; }
 dialog .hint { color: var(--muted); font-size: 12px; }
 dialog .err { color: var(--danger); font-size: 13px; min-height: 1.2em; }
 dialog .actions { display: flex; justify-content: flex-end; gap: 8px; }
+dialog p { margin: 0 0 16px; line-height: 1.5; }
 </style>
 </head>
 <body>
@@ -215,6 +218,7 @@ dialog .actions { display: flex; justify-content: flex-end; gap: 8px; }
       <div id="post-info" hidden>
         <span data-i18n="infoTitle"></span><input type="text" id="info-title" autocomplete="off">
         <span data-i18n="infoUrl"></span><input type="text" id="info-url" autocomplete="off" spellcheck="false">
+        <div class="hint" id="info-url-hint" hidden></div>
         <span data-i18n="infoFeatured"></span>
         <div class="featured">
           <img id="info-thumb" alt="" hidden>
@@ -319,6 +323,14 @@ dialog .actions { display: flex; justify-content: flex-end; gap: 8px; }
   </form>
 </dialog>
 
+<dialog id="conflict-dialog">
+  <form method="dialog">
+    <h2 data-i18n="conflictTitle"></h2>
+    <p data-i18n="conflictText"></p>
+    <div class="actions"><button value="later" data-i18n="conflictLater"></button><button value="overwrite" data-i18n="conflictOverwrite"></button><button class="primary" value="reload" data-i18n="conflictReload"></button></div>
+  </form>
+</dialog>
+
 <dialog id="new-dialog">
   <form method="dialog" id="new-form">
     <h2 data-i18n="newPost"></h2>
@@ -376,6 +388,11 @@ const I18N = {
     readOnly: '{path} is not Markdown, so it is shown read-only.',
     hasHtml: 'This post contains HTML (embeds, tables, …). WYSIWYG may drop it, so it opens in the source view.',
     unsaved: 'Unsaved', saving: 'Saving…', saved: 'Saved {time}', saveFailed: 'Save failed: {error}',
+    conflictTitle: 'This post changed on disk', conflictText: 'Another program (an editor, an AI tool, git) changed this file after it was opened here. Autosave is paused so neither version is lost.',
+    conflictReload: 'Load the file (drop my edits)', conflictOverwrite: 'Overwrite with my version', conflictLater: 'Decide later',
+    conflictStatus: 'Changed on disk, autosave paused (click)', conflictDiscard: 'Your edits to this post are not saved (it changed on disk). Drop them and open the other post?',
+    reloaded: 'Loaded the changes made on disk',
+    urlHint: 'New posts on this site get url: {pattern}, but this one has none, so it goes to {url}',
     markedDraft: 'Marked as draft', markedPublished: 'Marked as published',
     uploading: 'Uploading {name}…', imageSaved: 'Saved {file} ({kb} KB)', removedMeta: 'removed: {what}',
     meta_gps: 'location (GPS)', meta_camera: 'camera', meta_time: 'time taken', meta_author: 'author', meta_xmp: 'XMP data', meta_exif: 'EXIF', imageFailed: 'Image failed: {error}',
@@ -420,6 +437,11 @@ const I18N = {
     readOnly: '{path} 不是 Markdown，僅供檢視。',
     hasHtml: '這篇文章含有 HTML（嵌入內容、表格等），所見即所得可能會把它們移除，因此以原始檔檢視開啟。',
     unsaved: '尚未儲存', saving: '儲存中…', saved: '已儲存 {time}', saveFailed: '儲存失敗：{error}',
+    conflictTitle: '檔案已被其他程式修改', conflictText: '這篇文章開啟後，檔案被其他程式（編輯器、AI 工具、git）改過。已暫停自動儲存，兩邊的內容都還在。',
+    conflictReload: '載入檔案（捨棄我的修改）', conflictOverwrite: '用我的版本覆蓋', conflictLater: '稍後再決定',
+    conflictStatus: '檔案已被修改，暫停自動儲存（點此處理）', conflictDiscard: '這篇的修改尚未儲存（檔案已被其他程式修改）。要捨棄修改並開啟另一篇嗎？',
+    reloaded: '已載入檔案的最新內容',
+    urlHint: '這個網站的新文章會寫 url: {pattern}，這篇沒有，因此會發佈在 {url}',
     markedDraft: '已設為草稿', markedPublished: '已設為發布',
     uploading: '上傳 {name} 中…', imageSaved: '已儲存 {file}（{kb} KB）', removedMeta: '已移除：{what}',
     meta_gps: '拍攝地點（GPS）', meta_camera: '相機', meta_time: '拍攝時間', meta_author: '作者', meta_xmp: 'XMP 資訊', meta_exif: 'EXIF', imageFailed: '圖片失敗：{error}',
@@ -463,11 +485,14 @@ async function api(method, url, body, raw) {
   }
   const res = await fetch(url, opts);
   const data = await res.json().catch(() => ({ error: res.statusText }));
-  if (!res.ok) throw new Error(data.error || res.statusText);
+  if (!res.ok) throw Object.assign(new Error(data.error || res.statusText), { status: res.status });
   return data;
 }
 
-function status(text, err) { $('status').textContent = text; $('status').classList.toggle('err', !!err); }
+function status(text, err) {
+  $('status').textContent = text; $('status').classList.toggle('err', !!err);
+  $('status').classList.toggle('conflict', !!state.conflict && text === t('conflictStatus'));
+}
 const time = () => new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
 
 // Where the front matter (YAML ---, TOML +++ or a JSON object) ends; 0 if there is none.
@@ -890,10 +915,13 @@ function folderOf(url) {
 }
 
 async function openPost(path) {
-  if (state.dirty) await save();
+  if (state.dirty && !await save() && state.conflict && !confirm(t('conflictDiscard'))) return;
   const post = await api('GET', '/api/post?path=' + encodeURIComponent(path));
   const meta = state.posts.find(p => p.path === path) || { title: path, draft: false, url: '' };
+  // The server's url is the permalink now; the list's may be from before the file changed.
+  if (post.url !== undefined && meta.url !== post.url) meta.url = post.url;
   state.current = { ...meta, ...post };
+  state.conflict = false;
   document.querySelector('base').href = folderOf(meta.url);
   $('title').textContent = meta.title || path;
   $('draft-wrap').hidden = !post.editable;
@@ -946,25 +974,96 @@ function changed() {
   state.timer = setTimeout(save, 1000);
 }
 
-async function save() {
+// Saves run one after another: each sends the version the previous one returned. True when saved
+// (or nothing to save); false on an error or a conflict, which pauses autosave.
+function save() {
+  state.saving = (state.saving || Promise.resolve()).catch(() => {}).then(saveNow);
+  return state.saving;
+}
+
+async function saveNow() {
   clearTimeout(state.timer);
-  if (!state.current?.editable || !state.dirty) return;
-  const path = state.current.path, text = currentText();
+  if (!state.current?.editable || !state.dirty) return true;
+  if (state.conflict) { status(t('conflictStatus'), true); return false; }
+  const post = state.current, path = post.path, text = currentText();
   state.dirty = false;
-  if (text === state.savedText) { status(''); return; }
+  if (text === state.savedText) { status(''); return true; }
   try {
     status(t('saving'));
-    await api('PUT', '/api/post', { path, text });
+    const res = await api('PUT', '/api/post', { path, text, version: post.version });
     state.savedText = text;
+    post.version = res.version;
+    if (res.url !== undefined) {               // the front matter changed: title, url, slug, date …
+      post.front_title = res.front_title; post.front_url = res.front_url; post.featured = res.featured;
+      moved(res.url);
+    }
     status(t('saved', { time: time() }));
-  } catch (e) { state.dirty = true; status(t('saveFailed', { error: e.message }), true); }
+    return true;
+  } catch (e) {
+    state.dirty = true;
+    if (e.status === 409) conflict(); else status(t('saveFailed', { error: e.message }), true);
+    return false;
+  }
 }
+
+// The open post now lives at url: point the preview and the image base there.
+function moved(url) {
+  const post = state.current;
+  if (post.url !== url) {
+    post.url = url;
+    const p = state.posts.find(p => p.path === post.path); if (p) p.url = url;
+    document.querySelector('base').href = folderOf(url);
+    showPreview(url);
+  }
+  renderPostInfo();
+}
+
+// The file changed on disk since it was opened (another editor, an AI tool, git). Autosave stops
+// until the user picks a version, so neither is lost.
+function conflict() {
+  state.conflict = true;
+  status(t('conflictStatus'), true);
+  if (!$('conflict-dialog').open) $('conflict-dialog').showModal();
+}
+
+$('status').onclick = () => { if (state.conflict && !$('conflict-dialog').open) $('conflict-dialog').showModal(); };
+$('conflict-dialog').addEventListener('close', async () => {
+  const choice = $('conflict-dialog').returnValue, post = state.current;
+  $('conflict-dialog').returnValue = '';
+  if (!post || !state.conflict) return;
+  try {
+    if (choice === 'reload') {
+      state.dirty = false;
+      await openPost(post.path);
+      status(t('reloaded'));
+    } else if (choice === 'overwrite') {
+      post.version = (await api('GET', '/api/post?path=' + encodeURIComponent(post.path))).version;
+      state.conflict = false; state.dirty = true; state.savedText = null;
+      await save();
+    }
+  } catch (e) { status(e.message, true); }
+});
+
+// Back from another app: pick up changes made to the open post on disk, or flag a conflict
+// if it has unsaved edits here too.
+window.addEventListener('focus', async () => {
+  const post = state.current;
+  if (!post?.editable || state.conflict) return;
+  try {
+    const disk = await api('GET', '/api/post?path=' + encodeURIComponent(post.path));
+    if (state.current !== post || disk.version === post.version) return;
+    if (state.dirty) return conflict();
+    await openPost(post.path);
+    status(t('reloaded'));
+  } catch { /* the next save reports it */ }
+});
 
 async function setDraft(draft) {
   if (!state.current) return;
-  await save();
+  if (!await save()) { $('draft').checked = !draft; return; }
   try {
-    const { text } = await api('POST', '/api/draft', { path: state.current.path, draft });
+    const { text, version } = await api('POST', '/api/draft', { path: state.current.path, draft, version: state.current.version });
+    state.current.version = version;
     $('front-text').value = split(text)[0];
     if (state.view === 'source') {
       const ta = $('source'), pos = ta.selectionStart;
@@ -973,7 +1072,7 @@ async function setDraft(draft) {
     state.savedText = currentText();
     const p = state.posts.find(p => p.path === state.current.path); if (p) p.draft = draft;
     state.current.draft = draft; renderList(); status(t(draft ? 'markedDraft' : 'markedPublished'));
-  } catch (e) { $('draft').checked = !draft; status(e.message, true); }
+  } catch (e) { $('draft').checked = !draft; e.status === 409 ? conflict() : status(e.message, true); }
 }
 
 // -- images -------------------------------------------------------------------
@@ -1307,6 +1406,10 @@ function renderPostInfo() {
   $('info-title').value = post.front_title ?? post.title ?? '';
   $('info-url').value = post.front_url || '';
   $('info-url').placeholder = t('featuredUrlPlaceholder', { url: post.url || '' });
+  // New posts here get a url: (settings.url) but this one has none: Hugo's permalinks put it elsewhere.
+  const pattern = !post.front_url && state.info?.settings.url;
+  $('info-url-hint').hidden = !pattern;
+  if (pattern) $('info-url-hint').textContent = t('urlHint', { pattern, url: post.url || '?' });
   renderFeatured();
 }
 
@@ -1326,9 +1429,10 @@ function renderFeatured() {
 // Write one post setting to the front matter; the server returns the new text.
 async function setFront(field, value) {
   if (!state.current?.editable) return;
-  await save();
+  if (!await save()) return renderPostInfo();
   try {
-    const res = await api('POST', '/api/front', { path: state.current.path, field, value });
+    const res = await api('POST', '/api/front', { path: state.current.path, field, value, version: state.current.version });
+    state.current.version = res.version;
     $('front-text').value = split(res.text)[0];
     if (state.view === 'source') {
       const ta = $('source'), pos = ta.selectionStart;
@@ -1341,7 +1445,7 @@ async function setFront(field, value) {
     status(t('saved', { time: time() }));
     return res;
   } catch (e) {
-    status(e.message, true);
+    e.status === 409 ? conflict() : status(e.message, true);
     renderPostInfo();
   }
 }

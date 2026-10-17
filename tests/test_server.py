@@ -188,3 +188,26 @@ def test_featured_api(app):
     _, _, data = request(app, 'POST', '/api/featured', json.dumps({'path': BUNDLE, 'image': None}), WRITE)
     assert json.loads(data)['featured'] is None and 'images:' not in app.site.read(BUNDLE)
     assert request(app, 'POST', '/api/settings', json.dumps({'featured_field': 'a.b.c'}), WRITE)[0] == 400
+
+
+@needs_hugo
+def test_post_versions_and_conflicts(app):
+    _, _, data = request(app, 'GET', f'/api/post?path={BUNDLE}')
+    post = json.loads(data)
+    assert post['url'] == '/2024/05/hello-markdown.html' and post['version']
+    body = post['text'] + 'more\n'
+    status, _, data = request(app, 'PUT', '/api/post', json.dumps({'path': BUNDLE, 'text': body, 'version': post['version']}), WRITE)
+    saved = json.loads(data)
+    assert status == 200 and saved['version'] != post['version'] and 'url' not in saved   # body only: no re-listing
+    # A save that changes the front matter reports where the page lives now.
+    moved = body.replace('url: /2024/05/hello-markdown.html', 'slug: renamed')
+    _, _, data = request(app, 'PUT', '/api/post', json.dumps({'path': BUNDLE, 'text': moved, 'version': saved['version']}), WRITE)
+    saved = json.loads(data)
+    assert saved['url'] == '/posts/2024/05/renamed/' and saved['front_url'] is None
+    # Changed on disk by someone else: every write with the old version is a 409, the file is kept.
+    app.site.resolve(BUNDLE).write_text('changed elsewhere\n')
+    for method, path, extra in (('PUT', '/api/post', {'text': 'mine'}), ('POST', '/api/draft', {'draft': True}),
+                                ('POST', '/api/front', {'field': 'title', 'value': 'x'})):
+        body = json.dumps({'path': BUNDLE, 'version': saved['version'], **extra})
+        assert request(app, method, path, body, WRITE)[0] == 409
+    assert app.site.read(BUNDLE) == 'changed elsewhere\n'
