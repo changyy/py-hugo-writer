@@ -266,7 +266,12 @@ const editor = new toastui.Editor({
   theme: matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light',
   language: LANG === 'zh-TW' ? 'zh-TW' : 'en-US',
   hooks: {
-    addImageBlobHook: (blob, done) => { uploadImage(blob).then(r => r && done(r.url, '')); return false; },
+    addImageBlobHook: (blob, done) => {
+      // Insert only once the preview serves the new file: inserted any earlier, the browser
+      // gets a 404 while hugo is still picking the file up and keeps showing a broken image.
+      uploadImage(blob).then(async r => { if (r) { await imageReady(r.url); done(r.url, ''); } });
+      return false;
+    },
   },
 });
 editor.on('change', () => { if (!state.loading) changed(); });
@@ -433,6 +438,19 @@ async function setDraft(draft) {
 }
 
 // -- images -------------------------------------------------------------------
+
+// Wait (up to ~10 s) until an uploaded image is served at its URL, resolved like the editor
+// resolves it (against <base>, i.e. the post's folder, through the preview proxy).
+async function imageReady(url) {
+  if (!state.info?.preview) return;
+  const target = new URL(url, document.baseURI);
+  for (let i = 0; i < 40; i++) {
+    try {
+      if ((await fetch(target, { cache: 'no-store' })).ok) return;
+    } catch {}
+    await new Promise(r => setTimeout(r, 250));
+  }
+}
 
 async function uploadImage(file) {
   if (!state.current?.editable) return null;

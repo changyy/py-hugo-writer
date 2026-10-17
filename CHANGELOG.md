@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.20261017.1090054
+
+- Images dropped or pasted into the WYSIWYG view no longer show as broken: they are inserted once the
+  preview serves the new file (right after saving, hugo needs a moment and answered 404).
+
 ## 1.20261017.1084122
 
 - Markdown posts with HTML blocks (iframes, tables, scripts) open in the source view with a note,

@@ -5,4 +5,4 @@ Version scheme: ``1.YYYYmmdd.1HHmmss``. Consumed by the CLI (``--version``) and 
 the build backend (pyproject.toml ``[tool.hatch.version]``).
 """
 
-__version__ = "1.20261017.1084122"
+__version__ = "1.20261017.1090054"
