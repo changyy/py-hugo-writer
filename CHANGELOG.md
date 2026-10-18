@@ -1,5 +1,12 @@
 # Changelog
 
+## 1.20261018.1211357
+
+- The page views dialog links straight to GA4's Pages and screens report for the last 90 days: paste
+  the address of any GA4 report of the site there (or in Settings, "GA4 property") and it becomes
+  "Open Pages and screens in GA4 ↗", so updating comes down to one click, Download CSV and a drop.
+- Setting `ga4_property` (`a…p…` from a report's address, or `p…` from a property ID).
+
 ## 1.20261018.1203114
 
 - Page views from a report downloaded from GA4, no Google sign-in needed: "Show page views?" /

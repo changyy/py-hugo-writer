@@ -57,6 +57,9 @@ class Settings:
     featured_field: str = 'images'
     # A post without a featured image gets the first image dropped into it ("first"), or none.
     featured_default: str = 'first'
+    # The site's GA4 property, as in the address of a GA4 report (a123456789p987654321, or p987654321),
+    # for the editor's link to the Pages and screens report; empty for none.
+    ga4_property: str = ''
 
     @classmethod
     def load(cls, root: Path) -> 'Settings':
@@ -87,6 +90,8 @@ class Settings:
             raise SiteError('image_format must be webp, jpeg or png')
         if 'featured_field' in values:
             _featured_keys(values['featured_field'])
+        if 'ga4_property' in values:
+            values['ga4_property'] = ga4_property(values['ga4_property'])
         if 'featured_default' in values and values['featured_default'] not in ('first', 'none'):
             raise SiteError('featured_default must be first or none')
         if 'image_name' in values:
@@ -455,6 +460,18 @@ class Site:
             atomic_write(path, text.encode('utf-8'))
             updated.append(ref['path'])
         return {'name': new.name, 'file': new.relative_to(self.root).as_posix(), 'updated': updated, 'skipped': skipped}
+
+def ga4_property(text: str) -> str:
+    """a…p… from a GA4 address (or as is), p… from a property ID; '' clears it."""
+    text = text.strip()
+    if not text:
+        return ''
+    if m := re.search(r'(?<![\w])(a\d+p\d+)(?![\w])', text):
+        return m[1]
+    if m := re.fullmatch(r'(?:properties/|p)?(\d+)', text):
+        return 'p' + m[1]
+    raise SiteError('ga4_property: paste the address of a GA4 report, or the property ID')
+
 
 def folder_of(url: str) -> str:
     """Where Hugo publishes a bundle's files: /a/b/ for /a/b/, and /a/b/ for /a/b.html too."""

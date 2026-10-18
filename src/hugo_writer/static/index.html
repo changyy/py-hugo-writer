@@ -59,6 +59,10 @@ aside { display: flex; flex-direction: column; min-height: 0; border-right: 1px 
 .pv-upload { display: flex; align-items: center; gap: 10px; padding: 12px; margin-bottom: 8px; border: 1px dashed var(--border); border-radius: 8px; }
 .pv-upload.dragging { border-color: var(--accent); background: var(--hover); }
 .pv-result { font-size: 13px; }
+.pv-ga4 { font-weight: 600; }
+.pv-ga4-line { display: flex; gap: 12px; align-items: baseline; }
+.pv-ga4-set { display: flex; gap: 8px; margin-bottom: 4px; }
+.pv-ga4-set input { flex: 1; min-width: 0; }
 .pv-result.err { color: var(--danger); }
 .side-foot { display: flex; gap: 8px; padding: 8px 12px; border-top: 1px solid var(--border); }
 .side-foot select { flex: 1; min-width: 0; }
@@ -329,6 +333,14 @@ dialog p { margin: 0 0 16px; line-height: 1.5; }
   <h2 data-i18n="pvTitle"></h2>
   <p data-i18n-html="pvIntro"></p>
   <h3 data-i18n="pvCsvTitle"></h3>
+  <p class="pv-ga4-line" id="pv-ga4-line"><a id="pv-ga4" class="pv-ga4" target="_blank" rel="noopener"></a>
+    <button type="button" class="link" id="pv-ga4-change" data-i18n="pvGa4Change"></button></p>
+  <div class="pv-ga4-set" id="pv-ga4-set">
+    <input type="text" id="pv-ga4-input" autocomplete="off" spellcheck="false" data-i18n-placeholder="pvGa4Placeholder">
+    <button type="button" id="pv-ga4-save" data-i18n="save"></button>
+  </div>
+  <p class="hint" id="pv-ga4-hint" data-i18n="pvGa4Unset"></p>
+  <p class="pv-result err" id="pv-ga4-err" hidden></p>
   <ol data-i18n-html="pvCsvSteps"></ol>
   <div class="pv-upload" id="pv-drop">
     <button type="button" class="primary" id="pv-pick" data-i18n="pvPick"></button>
@@ -385,6 +397,9 @@ uv run scripts/ga4_pageviews.py --csv report.csv</pre>
         <option value="first" data-i18n="setFeaturedFirst"></option>
         <option value="none" data-i18n="setFeaturedNone"></option>
       </select></label>
+    <label><span data-i18n="setGa4"></span>
+      <input type="text" id="set-ga4" autocomplete="off" spellcheck="false" data-i18n-placeholder="setGa4Placeholder">
+      <span class="hint" data-i18n="setGa4Hint"></span></label>
     <span class="hint" data-i18n="setSavedTo"></span>
     <div class="err" id="set-err"></div>
     <div class="actions"><button value="cancel" formnovalidate data-i18n="cancel"></button><button class="primary" value="ok" data-i18n="save"></button></div>
@@ -462,6 +477,11 @@ const I18N = {
     gitLast: 'Last commit {ago}', gitNoCommit: 'No commits yet', gitMore: '… and {n} more',
     sortDate: 'By date', sortViews: 'By views', views: '{n} views, counted {time}', pvHelp: 'Show page views?',
     pvUpdate: 'Update page views…', pvUpdated: 'Updated {time}',
+    pvOpenGa4: 'Open Pages and screens in GA4 (last 90 days) ↗', pvGa4Change: 'Change',
+    pvGa4Placeholder: 'Paste the address of a GA4 report of this site',
+    pvGa4Unset: 'Paste the address of any GA4 report of this site (or its property ID), and this becomes a link straight to the report. Kept in .hugo-writer.toml.',
+    setGa4: 'GA4 property', setGa4Placeholder: 'Paste a GA4 report address, or the property ID',
+    setGa4Hint: 'For the link to the Pages and screens report under "Update page views…".',
     pvBroken: 'data/pageviews.json can\'t be read', pvTitle: 'Page views of every post',
     pvIntro: 'With a <code>data/pageviews.json</code> in the site, the post list shows each post\'s views and sorts by them; Hugo can show the same numbers on the pages (see the guide).',
     pvCsvTitle: 'Upload a report from Google Analytics 4',
@@ -528,6 +548,11 @@ const I18N = {
     gitLast: '上次 commit：{ago}', gitNoCommit: '尚未有任何 commit', gitMore: '…還有 {n} 個',
     sortDate: '依日期', sortViews: '依瀏覽數', views: '{n} 次瀏覽，{time} 統計', pvHelp: '如何顯示瀏覽數？',
     pvUpdate: '更新瀏覽數…', pvUpdated: '{time} 更新',
+    pvOpenGa4: '在 GA4 開啟「網頁和畫面」（最近 90 天）↗', pvGa4Change: '變更',
+    pvGa4Placeholder: '貼上這個網站任一張 GA4 報表的網址',
+    pvGa4Unset: '貼上這個網站任一張 GA4 報表的網址（或資源 ID），這裡就會變成直接開啟報表的連結。存在 .hugo-writer.toml。',
+    setGa4: 'GA4 資源', setGa4Placeholder: '貼上 GA4 報表的網址，或資源 ID',
+    setGa4Hint: '用於「更新瀏覽數…」裡直接開啟「網頁和畫面」報表的連結。',
     pvBroken: 'data/pageviews.json 無法讀取', pvTitle: '每篇文章的瀏覽數',
     pvIntro: '網站有 <code>data/pageviews.json</code> 時，文章列表會顯示每篇的瀏覽數，也能依瀏覽數排序；Hugo 建置時也能用同一份檔案把數字顯示在文章頁上（見說明）。',
     pvCsvTitle: '上傳 Google Analytics 4 報表',
@@ -1572,6 +1597,7 @@ function fillSettings() {
   $('set-featured-custom').value = fields.includes(s.featured_field) ? '' : s.featured_field;
   $('set-featured-custom').hidden = $('set-featured-field').value !== 'custom';
   $('set-featured-default').value = s.featured_default;
+  $('set-ga4').value = s.ga4_property;
 }
 $('set-featured-field').onchange = () => { $('set-featured-custom').hidden = $('set-featured-field').value !== 'custom'; };
 $('settings-btn').onclick = () => { fillSettings(); $('set-err').textContent = ''; $('settings-dialog').showModal(); };
@@ -1585,7 +1611,7 @@ $('settings-form').onsubmit = async e => {
       image_name: name, image_max_width: Number($('set-width').value), image_format: $('set-format').value,
       image_quality: Number($('set-quality').value), strip_metadata: $('set-strip').checked,
       featured_field: $('set-featured-field').value === 'custom' ? $('set-featured-custom').value.trim() : $('set-featured-field').value,
-      featured_default: $('set-featured-default').value,
+      featured_default: $('set-featured-default').value, ga4_property: $('set-ga4').value,
     });
     if (state.current?.editable) await openPost(state.current.path);   // re-read the featured image with the new key
     state.info.settings = res.settings;
@@ -1797,7 +1823,30 @@ $('search').oninput = renderList;
 $('filter').onchange = renderList;
 $('sort').value = load('sort') === 'views' ? 'views' : 'date';
 $('sort').onchange = e => { store('sort', e.target.value); renderList(); };
-$('pv-help').onclick = () => { $('pv-result').hidden = true; $('pv-dialog').showModal(); };
+// The Pages and screens report of the last 90 days, as GA4 links to it (ga4_property: a…p… or p…).
+const GA4_REPORT = 'https://analytics.google.com/analytics/web/#/{id}/reports/explorer?params=_u..nav%3Dmaui%26_u.dateOption%3Dlast90Days'
+  + '%26_r.explorerCard..selmet%3D%5B%22screenPageViews%22%5D%26_r.explorerCard..seldim%3D%5B%22unifiedPagePathScreen%22%5D'
+  + '%26_u.comparisonOption%3Ddisabled&r=all-pages-and-screens&ruid=all-pages-and-screens,business-objectives,examine-user-behavior'
+  + '&collectionId=business-objectives';
+// With the property set, a link to the report; without (or to change it), a field to paste an address in.
+function renderGa4Link(editing) {
+  const id = state.info?.settings.ga4_property;
+  $('pv-ga4-line').hidden = !id || editing;
+  $('pv-ga4-set').hidden = $('pv-ga4-hint').hidden = !!id && !editing;
+  $('pv-ga4-err').hidden = true;
+  if (id) { $('pv-ga4').href = GA4_REPORT.replace('{id}', id); $('pv-ga4').textContent = t('pvOpenGa4'); }
+  $('pv-ga4-input').value = id || '';
+}
+async function saveGa4(value) {
+  try {
+    state.info.settings = (await api('POST', '/api/settings', { ga4_property: value })).settings;
+    renderGa4Link(false);
+  } catch (e) { $('pv-ga4-err').hidden = false; $('pv-ga4-err').textContent = e.message; }
+}
+$('pv-ga4-change').onclick = () => { renderGa4Link(true); $('pv-ga4-input').select(); };
+$('pv-ga4-save').onclick = () => saveGa4($('pv-ga4-input').value);
+$('pv-ga4-input').addEventListener('keydown', e => { if (e.key === 'Enter' && !e.isComposing) { e.preventDefault(); saveGa4(e.target.value); } });
+$('pv-help').onclick = () => { renderGa4Link(false); $('pv-result').hidden = true; $('pv-dialog').showModal(); };
 $('pv-pick').onclick = () => $('pv-file').click();
 $('pv-file').onchange = e => { uploadPageviews(e.target.files[0]); e.target.value = ''; };
 $('pv-drop').addEventListener('dragover', e => { e.preventDefault(); $('pv-drop').classList.add('dragging'); });

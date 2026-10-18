@@ -351,3 +351,16 @@ def test_set_front_title_url_featured(site):
             site.set_front(BUNDLE, field, bad)
     with pytest.raises(SiteError):
         site.settings.save(site.root, {'featured_default': 'sometimes'})
+
+
+def test_ga4_property_from_a_report_address_or_an_id(site_dir):
+    from hugo_writer.site import Settings, SiteError, ga4_property
+    url = ('https://analytics.google.com/analytics/web/#/a123456789p987654321/reports/explorer?params=_u..nav%3Dmaui'
+           '&r=all-pages-and-screens')
+    assert ga4_property(url) == ga4_property(' a123456789p987654321 ') == 'a123456789p987654321'
+    assert ga4_property('987654321') == ga4_property('p987654321') == ga4_property('properties/987654321') == 'p987654321'
+    assert ga4_property('') == ''
+    with pytest.raises(SiteError):
+        ga4_property('G-ABC123')
+    assert Settings().save(site_dir, {'ga4_property': url}).ga4_property == 'a123456789p987654321'
+    assert 'ga4_property = "a123456789p987654321"' in (site_dir / '.hugo-writer.toml').read_text()

@@ -35,6 +35,10 @@ No service account, no keys: download the report yourself now and then, and merg
 4. In hugo-writer, **Update page views…** under the site name, and upload the CSV; or run
    `uv run scripts/ga4_pageviews.py --csv report.csv` in the site folder.
 
+In hugo-writer's upload dialog (or Settings ⚙), paste the address of any GA4 report of the site:
+the dialog then links straight to Pages and screens for the last 90 days, so steps 1 to 3 come
+down to one click and **Download CSV**.
+
 A count is then the views in the report's dates, dated by its last day. Each report updates the
 pages in it and leaves the others as they were, so uploading a 90-day report every month or so keeps
 the busy pages current and the quiet ones at their last count.
