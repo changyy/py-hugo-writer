@@ -43,6 +43,9 @@ aside { display: flex; flex-direction: column; min-height: 0; border-right: 1px 
 .side-head .row > :first-child { flex: 1; min-width: 0; }
 .site-name { font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .count { color: var(--muted); font-size: 12px; }
+.git { display: grid; gap: 1px; color: var(--muted); font-size: 12px; }
+.git span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.git .dirty { color: var(--draft); }
 .side-foot { display: flex; gap: 8px; padding: 8px 12px; border-top: 1px solid var(--border); }
 .side-foot select { flex: 1; min-width: 0; }
 .about { padding: 0 12px 10px; font-size: 11px; }
@@ -81,7 +84,8 @@ main { display: flex; flex-direction: column; min-width: 0; min-height: 0; }
 .toolbar { display: flex; align-items: center; gap: 10px; padding: 8px 12px; border-bottom: 1px solid var(--border); background: var(--panel); min-height: 49px; flex-wrap: wrap; }
 .toolbar .title { flex: 1; min-width: 120px; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .toolbar label { display: flex; align-items: center; gap: 4px; white-space: nowrap; }
-#status { color: var(--muted); font-size: 12px; white-space: nowrap; }
+#status, #saved { color: var(--muted); font-size: 12px; white-space: nowrap; }
+#saved.pending { color: var(--draft); }
 #status.err { color: var(--danger); }
 #status.conflict { cursor: pointer; text-decoration: underline; }
 .views { display: inline-flex; border: 1px solid var(--border); border-radius: 7px; overflow: hidden; }
@@ -176,6 +180,7 @@ dialog p { margin: 0 0 16px; line-height: 1.5; }
 <aside>
   <div class="side-head">
     <div class="row"><span class="site-name" id="site-name">…</span><button class="primary" id="new-btn" data-i18n="newPost"></button></div>
+    <div class="git" id="git" hidden><span id="git-state"></span><span id="git-commit"></span></div>
     <input type="search" id="search" data-i18n-placeholder="search">
     <div class="row">
       <select id="filter">
@@ -200,6 +205,7 @@ dialog p { margin: 0 0 16px; line-height: 1.5; }
   <div class="toolbar">
     <span class="title" id="title" data-i18n="noPost"></span>
     <label hidden id="draft-wrap"><input type="checkbox" id="draft"> <span data-i18n="draft"></span></label>
+    <span id="saved" hidden></span>
     <span id="status"></span>
     <div class="views" role="group" id="views">
       <button data-view="wysiwyg" data-i18n="viewWysiwyg" aria-pressed="false"></button>
@@ -399,7 +405,10 @@ const I18N = {
     cancel: 'Cancel', createDraft: 'Create draft', badgeDraft: 'draft', badgeReadOnly: 'read-only',
     readOnly: '{path} is not Markdown, so it is shown read-only.',
     hasHtml: 'This post contains HTML (embeds, tables, …). WYSIWYG may drop it, so it opens in the source view.',
-    unsaved: 'Unsaved', saving: 'Saving…', saved: 'Saved {time}', saveFailed: 'Save failed: {error}',
+    unsaved: 'Unsaved', saving: 'Saving…', savedAgo: 'Saved {ago}', savedAt: 'Saved to the file at {time}', justNow: 'just now',
+    saveFailed: 'Save failed: {error}', postUncommitted: 'not committed',
+    gitNone: 'Not in git', gitClean: 'git {branch}: all committed', gitDirty: 'git {branch}: {n} file(s) not committed',
+    gitLast: 'Last commit {ago}', gitNoCommit: 'No commits yet', gitMore: '… and {n} more',
     conflictTitle: 'This post changed on disk', conflictText: 'Another program (an editor, an AI tool, git) changed this file after it was opened here. Autosave is paused so neither version is lost.',
     conflictReload: 'Load the file (drop my edits)', conflictOverwrite: 'Overwrite with my version', conflictLater: 'Decide later',
     conflictStatus: 'Changed on disk, autosave paused (click)', conflictDiscard: 'Your edits to this post are not saved (it changed on disk). Drop them and open the other post?',
@@ -449,7 +458,10 @@ const I18N = {
     cancel: '取消', createDraft: '建立草稿', badgeDraft: '草稿', badgeReadOnly: '唯讀',
     readOnly: '{path} 不是 Markdown，僅供檢視。',
     hasHtml: '這篇文章含有 HTML（嵌入內容、表格等），所見即所得可能會把它們移除，因此以原始檔檢視開啟。',
-    unsaved: '尚未儲存', saving: '儲存中…', saved: '已儲存 {time}', saveFailed: '儲存失敗：{error}',
+    unsaved: '尚未儲存', saving: '儲存中…', savedAgo: '已儲存 · {ago}', savedAt: '{time} 存入檔案', justNow: '剛剛',
+    saveFailed: '儲存失敗：{error}', postUncommitted: '尚未 commit',
+    gitNone: '未使用 git 管理', gitClean: 'git {branch}：已全部 commit', gitDirty: 'git {branch}：{n} 個檔案尚未 commit',
+    gitLast: '上次 commit：{ago}', gitNoCommit: '尚未有任何 commit', gitMore: '…還有 {n} 個',
     conflictTitle: '檔案已被其他程式修改', conflictText: '這篇文章開啟後，檔案被其他程式（編輯器、AI 工具、git）改過。已暫停自動儲存，兩邊的內容都還在。',
     conflictReload: '載入檔案（捨棄我的修改）', conflictOverwrite: '用我的版本覆蓋', conflictLater: '稍後再決定',
     conflictStatus: '檔案已被修改，暫停自動儲存（點此處理）', conflictDiscard: '這篇的修改尚未儲存（檔案已被其他程式修改）。要捨棄修改並開啟另一篇嗎？',
@@ -506,7 +518,64 @@ function status(text, err) {
   $('status').textContent = text; $('status').classList.toggle('err', !!err);
   $('status').classList.toggle('conflict', !!state.conflict && text === t('conflictStatus'));
 }
-const time = () => new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+
+// -- saved and git indicators -------------------------------------------------
+
+const pad = n => String(n).padStart(2, '0');
+const stamp = ms => { const d = new Date(ms); return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`; };
+const RTF = new Intl.RelativeTimeFormat(LANG, { numeric: 'auto' });
+// "5 seconds ago" up to a day, the exact time after that.
+function ago(ms) {
+  const s = Math.max(0, Math.round((Date.now() - ms) / 1000));
+  if (s < 5) return t('justNow');
+  if (s < 60) return RTF.format(-s, 'second');
+  if (s < 3600) return RTF.format(-Math.floor(s / 60), 'minute');
+  if (s < 86400) return RTF.format(-Math.floor(s / 3600), 'hour');
+  return stamp(ms);
+}
+
+// The open post's save state: 'unsaved' / 'saving', or saved at state.savedAt (the file's mtime on opening).
+function saveState(phase, at) {
+  state.phase = phase;
+  if (at) state.savedAt = at;
+  renderSaved();
+}
+
+function renderSaved() {
+  const el = $('saved'), post = state.current;
+  el.hidden = !post?.editable;
+  if (el.hidden) return;
+  const uncommitted = state.git?.files?.some(f => f.path === post.path);
+  el.textContent = state.phase ? t(state.phase)
+    : state.savedAt ? t('savedAgo', { ago: ago(state.savedAt) }) + (uncommitted ? ' · ' + t('postUncommitted') : '') : '';
+  el.title = state.savedAt ? t('savedAt', { time: stamp(state.savedAt) }) : '';
+  el.classList.toggle('pending', !!state.phase);
+}
+
+function renderGit() {
+  const git = state.git;
+  $('git').hidden = !git;
+  if (!git) return;
+  const branch = git.branch || 'HEAD', last = git.last_commit;
+  $('git-state').textContent = !git.repo ? t('gitNone') : git.dirty ? t('gitDirty', { branch, n: git.dirty }) : t('gitClean', { branch });
+  $('git-state').classList.toggle('dirty', !!git.dirty);
+  $('git-state').title = git.dirty
+    ? git.files.map(f => `${f.status} ${f.path}`).join('\n') + (git.dirty > git.files.length ? '\n' + t('gitMore', { n: git.dirty - git.files.length }) : '') : '';
+  $('git-commit').hidden = !git.repo;
+  $('git-commit').textContent = last ? t('gitLast', { ago: ago(Date.parse(last.time)) }) : t('gitNoCommit');
+  $('git-commit').title = last ? `${last.hash} ${last.subject}\n${stamp(Date.parse(last.time))}` : '';
+}
+
+async function loadGit() {
+  try { state.git = await api('GET', '/api/git'); } catch { return; }
+  renderGit(); renderSaved();
+}
+
+// Refreshed after saves, on coming back to the window (a commit made elsewhere), and every 30 s.
+let gitTimer = null;
+const refreshGit = (delay = 1500) => { clearTimeout(gitTimer); gitTimer = setTimeout(loadGit, delay); };
+setInterval(() => { if (!document.hidden) loadGit(); }, 30000);
+setInterval(() => { renderSaved(); if (state.git) renderGit(); }, 1000);
 
 // Where the front matter (YAML ---, TOML +++ or a JSON object) ends; 0 if there is none.
 function frontEnd(text) {
@@ -957,6 +1026,7 @@ async function openPost(path) {
   // saving is skipped while the text still matches, so opening a post never rewrites it.
   state.savedText = post.editable ? currentText() : null;
   state.dirty = false; status('');
+  saveState('', post.mtime * 1000);
   showPreview(meta.url);
   layout();
   renderList();
@@ -982,7 +1052,7 @@ function showPreview(url) {
 function changed() {
   if (!state.current?.editable) return;
   if (!$('images-panel').hidden) renderImages();
-  state.dirty = true; status(t('unsaved'));
+  state.dirty = true; status(''); saveState('unsaved');
   clearTimeout(state.timer);
   state.timer = setTimeout(save, 1000);
 }
@@ -1000,9 +1070,9 @@ async function saveNow() {
   if (state.conflict) { status(t('conflictStatus'), true); return false; }
   const post = state.current, path = post.path, text = currentText();
   state.dirty = false;
-  if (text === state.savedText) { status(''); return true; }
+  if (text === state.savedText) { saveState(''); return true; }
   try {
-    status(t('saving'));
+    saveState('saving');
     const res = await api('PUT', '/api/post', { path, text, version: post.version });
     state.savedText = text;
     post.version = res.version;
@@ -1010,10 +1080,10 @@ async function saveNow() {
       post.front_title = res.front_title; post.front_url = res.front_url; post.featured = res.featured; post.tags = res.tags;
       moved(res.url);
     }
-    status(t('saved', { time: time() }));
+    saveState('', Date.now()); refreshGit();
     return true;
   } catch (e) {
-    state.dirty = true;
+    state.dirty = true; saveState('unsaved');
     if (e.status === 409) conflict(); else status(t('saveFailed', { error: e.message }), true);
     return false;
   }
@@ -1060,6 +1130,7 @@ $('conflict-dialog').addEventListener('close', async () => {
 // Back from another app: pick up changes made to the open post on disk, or flag a conflict
 // if it has unsaved edits here too.
 window.addEventListener('focus', async () => {
+  refreshGit(0);
   const post = state.current;
   if (!post?.editable || state.conflict) return;
   try {
@@ -1085,6 +1156,7 @@ async function setDraft(draft) {
     state.savedText = currentText();
     const p = state.posts.find(p => p.path === state.current.path); if (p) p.draft = draft;
     state.current.draft = draft; renderList(); status(t(draft ? 'markedDraft' : 'markedPublished'));
+    saveState('', Date.now()); refreshGit();
   } catch (e) { $('draft').checked = !draft; e.status === 409 ? conflict() : status(e.message, true); }
 }
 
@@ -1504,7 +1576,7 @@ async function setFront(field, value) {
     state.current.featured = res.featured;
     if (field === 'title') state.current.front_title = value;
     if (field === 'url') state.current.front_url = value;
-    status(t('saved', { time: time() }));
+    saveState('', Date.now()); refreshGit();
     return res;
   } catch (e) {
     e.status === 409 ? conflict() : status(e.message, true);
@@ -1638,6 +1710,7 @@ layout();
     $('imgsize').options[0].textContent = t('sizeOriginal', { max: state.info.settings.image_max_width });
     await loadPosts();
     loadTags();
+    loadGit();
     // ?open=content/posts/…/index.md opens a post directly (handy for bookmarks).
     const open = new URLSearchParams(location.search).get('open');
     if (open) await openPost(open);

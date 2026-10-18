@@ -1,5 +1,14 @@
 # Changelog
 
+## 1.20261018.1195423
+
+- The toolbar keeps when the open post was saved: "Saved · 5 seconds ago" (minutes, hours; the date
+  and time after a day), the exact `YYYY-MM-DD HH:mm:ss` on hover. On opening a post it is the file's
+  modification time; it shows "not committed" when git has changes to the post.
+- Under the site name: whether the site is in git, how many of its files are not committed (the list
+  on hover) and when the last commit was. Refreshed after saves, on coming back to the window and
+  every 30 seconds (GET /api/git). A site inside a larger repository counts only its own files.
+
 ## 1.20261018.1102747
 
 - Tags above the editor: the post's tags as chips; type one and press Enter or a comma (`，` and `、`

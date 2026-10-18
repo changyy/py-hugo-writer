@@ -226,3 +226,11 @@ def test_post_versions_and_conflicts(app):
         body = json.dumps({'path': BUNDLE, 'version': saved['version'], **extra})
         assert request(app, method, path, body, WRITE)[0] == 409
     assert app.site.read(BUNDLE) == 'changed elsewhere\n'
+
+
+def test_reports_git_status_and_the_post_mtime(app):
+    status, _, body = request(app, 'GET', '/api/git')
+    assert status == 200 and 'repo' in json.loads(body)
+    post = json.loads(request(app, 'GET', f'/api/post?path={BUNDLE}')[2])
+    assert post['mtime'] == app.site.resolve(BUNDLE).stat().st_mtime
+

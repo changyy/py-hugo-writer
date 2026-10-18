@@ -9,7 +9,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from importlib import resources
 from urllib.parse import parse_qs, urlsplit
 
-from . import images
+from . import git, images
 from ._version import __version__
 from .site import Conflict, SiteError, atomic_write, front_matter, get_featured, get_tags, has_raw_html, version
 
@@ -153,6 +153,9 @@ class Handler(BaseHTTPRequestHandler):
             'settings': vars(site.settings),
         })
 
+    def git_status(self):
+        self._json(git.status(self.server.site.root))
+
     def list_posts(self):
         self._json({'posts': self.server.site.posts()})
 
@@ -163,8 +166,9 @@ class Handler(BaseHTTPRequestHandler):
         editable = site.resolve(rel).suffix.lower() in ('.md', '.markdown')
         front = self._front(text) if editable else {'featured': None, 'front_title': None, 'front_url': None, 'tags': []}
         # url: the permalink right now, so a post whose url / slug changed elsewhere previews where it lives.
+        # mtime: when the file was last saved (here or elsewhere), for the editor's "Saved … ago".
         self._json({'path': rel, 'text': text, 'editable': editable, 'has_html': editable and has_raw_html(text),
-                    'version': version(text), 'url': site.url_of(rel), **front})
+                    'version': version(text), 'url': site.url_of(rel), 'mtime': site.resolve(rel).stat().st_mtime, **front})
 
     def _front(self, text: str) -> dict:
         front = {}
@@ -265,7 +269,7 @@ class Handler(BaseHTTPRequestHandler):
 
 GET_ROUTES = {'/': Handler.index, '/api/info': Handler.info, '/api/posts': Handler.list_posts,
               '/api/post': Handler.get_post, '/api/images': Handler.list_images, '/api/library': Handler.library,
-              '/api/tags': Handler.list_tags}
+              '/api/tags': Handler.list_tags, '/api/git': Handler.git_status}
 POST_ROUTES = {'/api/post': Handler.create_post, '/api/draft': Handler.draft, '/api/image': Handler.upload_image,
                '/api/image/delete': Handler.delete_image, '/api/image/rename': Handler.rename_image,
                '/api/library/delete': Handler.library_delete, '/api/settings': Handler.save_settings,

@@ -38,6 +38,7 @@ to your content folder. No server to host, no account, no database — just your
 | 8a | Links that open in a new tab, with rel (nofollow, sponsored, ugc, …) | click a link; written as HTML `<a>` only when needed |
 | 8b | Settings in the UI | image naming, maximum width, format, quality, metadata — saved to `.hugo-writer.toml` |
 | 9 | Autosave, and the open post stays in the address | a second after you stop typing, or ⌘S / Ctrl+S; reloading comes back to the same post |
+| 9a | When the post was saved, and what git has not got yet | "Saved · 5 seconds ago" (the exact time on hover); under the site name: in git or not, how many files are not committed, the last commit |
 | 10 | English and Traditional Chinese UI | follows the browser language; switch at the bottom left |
 
 Only Markdown posts are editable. Other content files (HTML, Org, …) are listed and
@@ -278,6 +279,7 @@ py-hugo-writer/
     images.py             resize / re-encode / strip EXIF
     preview.py            the private `hugo server`
     server.py             local HTTP server and JSON API
+    git.py                whether the site is in git, what is not committed
     static/index.html     the editor (single page)
     static/vendor/        TOAST UI Editor 3.2.2
   examples/demo-site/     sample Hugo site for trying it out and for tests
