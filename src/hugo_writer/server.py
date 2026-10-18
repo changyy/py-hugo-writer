@@ -163,6 +163,10 @@ class Handler(BaseHTTPRequestHandler):
         posts = [{**p, 'views': pageviews.views_of(views, p['url'])} for p in self.server.site.posts()]
         self._json({'posts': posts, 'pageviews': views and {k: views[k] for k in ('updated', 'error') if k in views}})
 
+    def upload_pageviews(self):
+        # The body: a report downloaded from GA4 (Pages and screens, as CSV).
+        self._json(pageviews.merge_csv(self.server.site.root, self._body().decode('utf-8-sig')))
+
     def get_post(self):
         rel = self._query().get('path', '')
         site = self.server.site
@@ -277,5 +281,6 @@ GET_ROUTES = {'/': Handler.index, '/api/info': Handler.info, '/api/posts': Handl
 POST_ROUTES = {'/api/post': Handler.create_post, '/api/draft': Handler.draft, '/api/image': Handler.upload_image,
                '/api/image/delete': Handler.delete_image, '/api/image/rename': Handler.rename_image,
                '/api/library/delete': Handler.library_delete, '/api/settings': Handler.save_settings,
-               '/api/featured': Handler.set_featured, '/api/front': Handler.set_front}
+               '/api/featured': Handler.set_featured, '/api/front': Handler.set_front,
+               '/api/pageviews': Handler.upload_pageviews}
 PUT_ROUTES = {'/api/post': Handler.save_post}

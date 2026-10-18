@@ -1,5 +1,14 @@
 # Changelog
 
+## 1.20261018.1203114
+
+- Page views from a report downloaded from GA4, no Google sign-in needed: "Show page views?" /
+  "Update page views…" under the site name takes the Pages and screens report as CSV (chosen or
+  dropped) and merges it into `data/pageviews.json` (POST /api/pageviews). Counts are dated by the
+  report's last day; pages it leaves out keep their last count.
+- `scripts/ga4_pageviews.py --csv report.csv` does the same from the command line.
+- `docs/pageviews.md` starts with the report download; the GA4 API setup follows.
+
 ## 1.20261018.1195452
 
 - Page views in the post list, from the site's `data/pageviews.json`: `👁 1,245` next to each post

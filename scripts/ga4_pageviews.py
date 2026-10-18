@@ -6,11 +6,16 @@
 """Page views per page from Google Analytics 4, merged into data/pageviews.json for Hugo templates.
 
     uv run ga4_pageviews.py --property 123456789 [--years 5] [--top 2000] [--output data/pageviews.json]
+    uv run ga4_pageviews.py --csv exported.csv [--output data/pageviews.json]
 
 Each run asks GA4 for the views of the last --years (the most viewed --top pages only, if given)
 and merges them into the file: pages in the answer get the new count and today's date, pages
 left out keep the count and date they had. So a small --top keeps the file short to fetch, and
 old posts nobody reads any more keep their last known number.
+
+--csv reads a report downloaded from the GA4 web UI instead, no Google sign-in needed: Reports >
+Engagement > Pages and screens, dimension "Page path and screen class", the date range wanted,
+then Share this report > Download file > Download CSV. Its counts are dated by the report's end date.
 
     {"updated": "...", "years": 5,
      "pages": {"/2024/05/hello-markdown": {"views": 1245, "at": "2026-10-18T03:00:00+08:00"}, ...}}
@@ -28,13 +33,15 @@ Signing in, the first that is set:
 The account needs the Viewer role on the GA4 property (Admin > Property access management).
 """
 import argparse
+import csv
 import json
+import re
 import os
 import sys
 import tempfile
 import urllib.error
 import urllib.request
-from datetime import datetime
+from datetime import datetime, time
 from pathlib import Path
 from urllib.parse import quote, unquote
 
@@ -107,13 +114,53 @@ def fetch(property_id: str, token: str, years: int = 5, top: int = 0, host: str 
             return views
 
 
-def merge(old: dict, views: dict[str, int], years: int, now: datetime) -> dict:
-    """The new counts over the old file's: pages GA4 left out this time keep what they had."""
-    at = now.isoformat(timespec='seconds')
-    pages = dict(old.get('pages') or {}) if old.get('years', years) == years else {}
-    pages.update({key: {'views': n, 'at': at} for key, n in views.items()})
+# The views column of a downloaded report, in the languages GA4 is used in most; else the second column.
+VIEWS_HEADERS = {'views', '瀏覽', '瀏覽次數', '浏览', '浏览次数', '表示回数', '조회수', 'aufrufe', 'vues', 'visualizaciones'}
+
+
+def read_csv(text: str) -> tuple[dict[str, int], datetime | None]:
+    """A report downloaded from the GA4 web UI: views per page, and the report's end date."""
+    end, lines = None, []
+    for line in text.lstrip('\ufeff').splitlines():
+        if line.startswith('#'):
+            # "# End date: 20261017", "# 結束日期：20261017"; the start date comes first.
+            if m := re.search(r'(\d{8})\s*$', line):
+                end = datetime.strptime(m[1], '%Y%m%d')
+        elif line.strip():
+            lines.append(line)
+    rows = list(csv.reader(lines))
+    if not rows:
+        raise Error('the CSV has no rows')
+    header = [h.strip().lower() for h in rows[0]]
+    col = next((i for i, h in enumerate(header) if h in VIEWS_HEADERS), 1)
+    views = {}
+    for row in rows[1:]:
+        if len(row) <= col or not row[0].startswith('/'):    # a total, or not a page
+            continue
+        try:
+            n = int(float(row[col].replace(',', '').strip() or 0))
+        except ValueError:
+            raise Error(f'not a number of views: {row[col]!r} ({row[0]})')
+        key = page_key(row[0])
+        views[key] = views.get(key, 0) + n
+    if not views and len(rows) > 1:
+        raise Error('no page paths found; download the report with the "Page path" dimension')
+    # Counted to the end of the report's last day.
+    return views, end and datetime.combine(end.date(), time(23, 59, 59)).astimezone()
+
+
+def merge(old: dict, views: dict[str, int], years: int | None, now: datetime, at: datetime | None = None) -> dict:
+    """The new counts over the old file's: pages GA4 left out this time keep what they had.
+
+    at: when the counts are from (a CSV's end date), now if not given. Fetching another --years
+    than the file was made with starts it over; a CSV, whatever its dates, merges."""
+    stamp = (at or now).isoformat(timespec='seconds')
+    same = years is None or old.get('years', years) == years
+    pages = dict(old.get('pages') or {}) if same else {}
+    pages.update({key: {'views': n, 'at': stamp} for key, n in views.items()})
     pages = dict(sorted(pages.items(), key=lambda kv: (-kv[1]['views'], kv[0])))
-    return {'updated': at, 'years': years, 'pages': pages}
+    data = {'updated': now.isoformat(timespec='seconds'), 'years': years or old.get('years'), 'pages': pages}
+    return {k: v for k, v in data.items() if v is not None}
 
 
 def main(argv=None) -> int:
@@ -126,10 +173,11 @@ def main(argv=None) -> int:
     ap.add_argument('--output', default='data/pageviews.json', help='file to merge into (default: data/pageviews.json)')
     ap.add_argument('--credentials', help='service account key file (JSON)')
     ap.add_argument('--token', default=os.environ.get('GA4_ACCESS_TOKEN'), help='OAuth access token (default: GA4_ACCESS_TOKEN)')
+    ap.add_argument('--csv', help='read a report downloaded from the GA4 web UI instead of asking GA4')
     args = ap.parse_args(argv)
     prop = (args.property or '').strip().removeprefix('properties/')
     try:
-        if not prop.isdigit():
+        if not args.csv and not prop.isdigit():
             raise Error('which GA4 property? pass --property 123456789 (Admin > Property details > Property ID)')
         if not 1 <= args.years <= 10:
             raise Error('--years must be between 1 and 10')
@@ -138,8 +186,13 @@ def main(argv=None) -> int:
             old = json.loads(out.read_text(encoding='utf-8')) if out.is_file() else {}
         except ValueError:
             raise Error(f'{out} is not JSON; move it away to start over')
-        views = fetch(prop, args.token or access_token(args.credentials), args.years, args.top, args.host)
-        data = merge(old, views, args.years, datetime.now().astimezone())
+        now = datetime.now().astimezone()
+        if args.csv:
+            views, at = read_csv(Path(args.csv).read_text(encoding='utf-8-sig'))
+            data = merge(old, views, None, now, at)
+        else:
+            views = fetch(prop, args.token or access_token(args.credentials), args.years, args.top, args.host)
+            data = merge(old, views, args.years, now)
         out.parent.mkdir(parents=True, exist_ok=True)
         # Written whole or not at all: a build reading it never sees half a file.
         with tempfile.NamedTemporaryFile('w', encoding='utf-8', dir=out.parent, delete=False, suffix='.tmp') as f:
@@ -150,7 +203,7 @@ def main(argv=None) -> int:
         print(f'ga4_pageviews: {e}', file=sys.stderr)
         return 1
     kept = len(data['pages']) - len(views)
-    print(f'{sum(views.values()):,} views on {len(views):,} pages from GA4'
+    print(f'{sum(views.values()):,} views on {len(views):,} pages from ' + (args.csv or 'GA4')
           + (f', {kept:,} more kept from the last run' if kept else '') + f' -> {out}')
     return 0
 

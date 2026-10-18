@@ -77,3 +77,41 @@ def test_hugo_writer_reads_the_keys_the_script_writes():
     from hugo_writer.pageviews import page_key
     for path in ('/', '/a/b.html', '/a/b/', '/a/b/index.html?x=1', '/A/中文 測試/', "/a/(b)+c!/"):
         assert page_key(path) == ga4.page_key(path)
+
+
+# As the GA4 web UI downloads it (zh-TW UI): comments with the dates, CRLF, extra columns.
+REPORT = ('# ----------------------------------------\r\n# 網頁和畫面: 網頁路徑與畫面類別\r\n# 資源：blog.example\r\n'
+          '# \r\n# 所有使用者\r\n# 開始日期：20260720\r\n# 結束日期：20261017\r\n'
+          '網頁路徑與畫面類別,瀏覽,活躍使用者,每位活躍使用者觀看數\r\n'
+          '/,50,26,1.92\r\n/2026/10/hello,8,3,2.6\r\n/2026/10/hello.html,2,1,2\r\n"/2026/05/big","1,234",9,1\r\n')
+
+
+def test_reads_a_report_downloaded_from_ga4():
+    views, at = ga4.read_csv('﻿' + REPORT)
+    assert views == {'/': 50, '/2026/10/hello': 10, '/2026/05/big': 1234}
+    assert at.date().isoformat() == '2026-10-17' and (at.hour, at.minute) == (23, 59)
+    # English UI, a totals row, no dates.
+    views, at = ga4.read_csv('Page path and screen class,Views,Active users\nGrand total,99,9\n/a/,3,1\n')
+    assert views == {'/a': 3} and at is None
+
+
+def test_a_report_merges_and_is_dated_by_its_end_date(tmp_path):
+    out = tmp_path / 'data' / 'pageviews.json'
+    report = tmp_path / 'report.csv'
+    report.write_text(REPORT, encoding='utf-8')
+    out.parent.mkdir()
+    out.write_text(json.dumps({'years': 5, 'pages': {'/old': {'views': 7, 'at': '2026-01-01T00:00:00+08:00'}}}))
+    assert ga4.main(['--csv', str(report), '--output', str(out)]) == 0
+    data = json.loads(out.read_text())
+    assert data['pages']['/old']['views'] == 7 and data['years'] == 5
+    assert data['pages']['/2026/10/hello'] == {'views': 10, 'at': data['pages']['/']['at']}
+    assert data['pages']['/']['at'].startswith('2026-10-17T23:59:59')
+
+
+def test_hugo_writer_reads_reports_and_merges_as_the_script_does():
+    from hugo_writer import pageviews
+    assert pageviews.read_csv(REPORT) == ga4.read_csv(REPORT)
+    old = {'years': 5, 'pages': {'/old': {'views': 7, 'at': '2026-01-01T00:00:00+08:00'}}}
+    views, at = ga4.read_csv(REPORT)
+    assert pageviews.merge(old, views, None, NOW, at) == ga4.merge(old, views, None, NOW, at)
+    assert pageviews.merge(old, views, 3, NOW) == ga4.merge(old, views, 3, NOW)

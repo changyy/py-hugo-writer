@@ -4,10 +4,11 @@ One file, `data/pageviews.json`, and two pieces around it. Neither needs hugo-wr
 
 | File | What it does |
 |------|--------------|
-| [`scripts/ga4_pageviews.py`](../scripts/ga4_pageviews.py) | Asks Google Analytics 4 for each page's views and merges them into `data/pageviews.json` |
+| [`scripts/ga4_pageviews.py`](../scripts/ga4_pageviews.py) | Asks Google Analytics 4 for each page's views (or reads a report downloaded from it) and merges them into `data/pageviews.json` |
 | [`pageviews.html`](../examples/demo-site/layouts/partials/pageviews.html) | A Hugo partial that shows them: `1,245 次瀏覽（3 天前統計）` / `1,245 views (as of 3d ago)` |
 
-hugo-writer shows the same numbers in its post list, and sorts by them. The site never calls
+hugo-writer shows the same numbers in its post list, sorts by them, and takes a report downloaded
+from GA4 to update the file (no Google sign-in; see below). The site never calls
 Google: the numbers are in the JSON, and Hugo writes them into the pages. The demo site has an
 example: [`data/pageviews.json`](../examples/demo-site/data/pageviews.json), shown by its
 `single.html`.
@@ -22,6 +23,23 @@ The file, written by the script or by anything else:
 
 A key is the page's URL path (as `.RelPermalink` writes it, percent-encoded) in lower case, without
 the query, `index.html`, `.html` or a trailing slash. `at` is when that count was taken.
+
+## Without any setup: a report downloaded from GA4
+
+No service account, no keys: download the report yourself now and then, and merge it in.
+
+1. In GA4: **Reports › Engagement › Pages and screens** (網頁和畫面), dimension **Page path and
+   screen class**.
+2. Pick the dates, e.g. **Last 90 days**.
+3. **Share this report** (top right) › **Download file** › **Download CSV**.
+4. In hugo-writer, **Update page views…** under the site name, and upload the CSV; or run
+   `uv run scripts/ga4_pageviews.py --csv report.csv` in the site folder.
+
+A count is then the views in the report's dates, dated by its last day. Each report updates the
+pages in it and leaves the others as they were, so uploading a 90-day report every month or so keeps
+the busy pages current and the quiet ones at their last count.
+
+The rest of this guide sets up the API instead, for updates without anyone downloading anything.
 
 ## 1. Google side (once)
 

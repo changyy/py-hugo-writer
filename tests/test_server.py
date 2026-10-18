@@ -245,3 +245,15 @@ def test_lists_page_views_from_data_pageviews_json(app):
     (app.site.root / 'data' / 'pageviews.json').unlink()
     data = json.loads(request(app, 'GET', '/api/posts')[2])
     assert data['pageviews'] is None and all(p['views'] is None for p in data['posts'])
+
+
+def test_merges_a_report_uploaded_from_ga4(app):
+    from .test_ga4_pageviews import REPORT
+    status, _, body = request(app, 'POST', '/api/pageviews', REPORT.encode(), {'X-Hugo-Writer': '1'})
+    res = json.loads(body)
+    assert status == 200 and res['pages'] == 3 and res['views'] == 1294 and res['at'].startswith('2026-10-17')
+    assert res['kept'] == 3                     # the demo's example pages not in the report
+    data = json.loads((app.site.root / 'data' / 'pageviews.json').read_text())
+    assert data['pages']['/2026/05/big']['views'] == 1234 and data['pages']['/2024/05/hello-markdown']['views'] == 1245
+    assert request(app, 'POST', '/api/pageviews', b'not,a report\n1,2\n', {'X-Hugo-Writer': '1'})[0] == 400
+    assert request(app, 'POST', '/api/pageviews', REPORT.encode())[0] == 403

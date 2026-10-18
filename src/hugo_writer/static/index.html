@@ -52,6 +52,14 @@ aside { display: flex; flex-direction: column; min-height: 0; border-right: 1px 
 #pv-dialog { width: min(640px, 92vw); }
 #pv-dialog pre { margin: 0 0 12px; padding: 8px 10px; overflow-x: auto; border-radius: 6px; background: var(--code); font: 12px/1.5 var(--mono); }
 #pv-dialog code { font: 12px var(--mono); }
+#pv-dialog h3 { margin: 4px 0 6px; font-size: 14px; }
+#pv-dialog ol { margin: 0 0 10px; padding-left: 20px; line-height: 1.6; }
+#pv-dialog details { margin: 4px 0 14px; }
+#pv-dialog summary { cursor: pointer; color: var(--muted); margin-bottom: 8px; }
+.pv-upload { display: flex; align-items: center; gap: 10px; padding: 12px; margin-bottom: 8px; border: 1px dashed var(--border); border-radius: 8px; }
+.pv-upload.dragging { border-color: var(--accent); background: var(--hover); }
+.pv-result { font-size: 13px; }
+.pv-result.err { color: var(--danger); }
 .side-foot { display: flex; gap: 8px; padding: 8px 12px; border-top: 1px solid var(--border); }
 .side-foot select { flex: 1; min-width: 0; }
 .about { padding: 0 12px 10px; font-size: 11px; }
@@ -320,19 +328,32 @@ dialog p { margin: 0 0 16px; line-height: 1.5; }
 <dialog id="pv-dialog">
   <h2 data-i18n="pvTitle"></h2>
   <p data-i18n-html="pvIntro"></p>
-  <p data-i18n="pvGa4"></p>
+  <h3 data-i18n="pvCsvTitle"></h3>
+  <ol data-i18n-html="pvCsvSteps"></ol>
+  <div class="pv-upload" id="pv-drop">
+    <button type="button" class="primary" id="pv-pick" data-i18n="pvPick"></button>
+    <input type="file" id="pv-file" accept=".csv,text/csv" hidden>
+    <span class="hint" data-i18n="pvDrop"></span>
+  </div>
+  <p class="pv-result" id="pv-result" hidden></p>
+  <p class="hint" data-i18n="pvCsvNote"></p>
+  <details>
+    <summary data-i18n="pvAutoTitle"></summary>
+    <p data-i18n="pvGa4"></p>
 <pre>curl -fsSLo scripts/ga4_pageviews.py \
   https://raw.githubusercontent.com/changyy/py-hugo-writer/main/scripts/ga4_pageviews.py
-uv run scripts/ga4_pageviews.py --property 123456789 --credentials key.json --top 2000</pre>
-  <p data-i18n-html="pvFormat"></p>
-<pre>{"updated": "2026-10-18T03:00:00+08:00", "years": 5, "pages": {
- "/2024/05/hello-markdown": {"views": 1245, "at": "2026-10-18T03:00:00+08:00"},
+uv run scripts/ga4_pageviews.py --property 123456789 --credentials key.json --top 2000
+uv run scripts/ga4_pageviews.py --csv report.csv</pre>
+    <p data-i18n-html="pvFormat"></p>
+<pre>{"updated": "2026-10-18T03:00:00+08:00", "pages": {
+ "/2024/05/hello-markdown": {"views": 1245, "at": "2026-10-17T23:59:59+08:00"},
  "/2010/01/legacy": {"views": 87, "at": "2025-06-01T03:00:00+08:00"}
 }}</pre>
-  <p><a href="https://github.com/changyy/py-hugo-writer/blob/main/scripts/ga4_pageviews.py" target="_blank" rel="noopener" data-i18n="pvScript"></a>
-    · <a href="https://github.com/changyy/py-hugo-writer/blob/main/docs/pageviews.md" target="_blank" rel="noopener" data-i18n="pvDocs"></a></p>
+    <p><a href="https://github.com/changyy/py-hugo-writer/blob/main/scripts/ga4_pageviews.py" target="_blank" rel="noopener" data-i18n="pvScript"></a>
+      · <a href="https://github.com/changyy/py-hugo-writer/blob/main/docs/pageviews.md" target="_blank" rel="noopener" data-i18n="pvDocs"></a></p>
+  </details>
   <form method="dialog" class="actions">
-    <button value="hide" data-i18n="pvHide"></button>
+    <button value="hide" id="pv-hide" data-i18n="pvHide"></button>
     <button value="close" class="primary" data-i18n="pvClose"></button>
   </form>
 </dialog>
@@ -440,9 +461,16 @@ const I18N = {
     gitNone: 'Not in git', gitClean: 'git {branch}: all committed', gitDirty: 'git {branch}: {n} file(s) not committed',
     gitLast: 'Last commit {ago}', gitNoCommit: 'No commits yet', gitMore: '… and {n} more',
     sortDate: 'By date', sortViews: 'By views', views: '{n} views, counted {time}', pvHelp: 'Show page views?',
+    pvUpdate: 'Update page views…', pvUpdated: 'Updated {time}',
     pvBroken: 'data/pageviews.json can\'t be read', pvTitle: 'Page views of every post',
-    pvIntro: 'Put a <code>data/pageviews.json</code> in the site and the post list shows each post\'s views, and sorts by them. Hugo can show the same numbers on the pages (see the guide).',
-    pvGa4: 'To make it from Google Analytics 4 (with a service account that can view the property), run in the site folder:',
+    pvIntro: 'With a <code>data/pageviews.json</code> in the site, the post list shows each post\'s views and sorts by them; Hugo can show the same numbers on the pages (see the guide).',
+    pvCsvTitle: 'Upload a report from Google Analytics 4',
+    pvCsvSteps: '<li>In GA4: <b>Reports › Engagement › Pages and screens</b></li><li>Pick the dates, e.g. <b>Last 90 days</b></li><li><b>Share this report</b> (top right) › <b>Download file</b> › <b>Download CSV</b></li><li>Upload it here</li>',
+    pvPick: 'Choose CSV…', pvDrop: 'or drop it here', pvReading: 'Reading {name}…',
+    pvDone: '{pages} pages, {views} views (to {date}) written to data/pageviews.json.', pvKept: ' {kept} other pages keep their last count.',
+    pvCsvNote: 'A count is the views in the report\'s dates. Each upload updates the pages in it; pages it leaves out keep their last count and its date. No Google sign-in needed.',
+    pvAutoTitle: 'Every day, automatically (GA4 API)',
+    pvGa4: 'With a service account that can view the GA4 property, run in the site folder (a CI job can, too); the script also reads a downloaded CSV:',
     pvFormat: 'The file looks like this; a key is the page\'s URL in lower case, without <code>.html</code> or a trailing slash:',
     pvScript: 'ga4_pageviews.py', pvDocs: 'Guide: GA4 setup, the Hugo partial, daily updates', pvHide: 'Don\'t show again', pvClose: 'Close',
     conflictTitle: 'This post changed on disk', conflictText: 'Another program (an editor, an AI tool, git) changed this file after it was opened here. Autosave is paused so neither version is lost.',
@@ -499,9 +527,16 @@ const I18N = {
     gitNone: '未使用 git 管理', gitClean: 'git {branch}：已全部 commit', gitDirty: 'git {branch}：{n} 個檔案尚未 commit',
     gitLast: '上次 commit：{ago}', gitNoCommit: '尚未有任何 commit', gitMore: '…還有 {n} 個',
     sortDate: '依日期', sortViews: '依瀏覽數', views: '{n} 次瀏覽，{time} 統計', pvHelp: '如何顯示瀏覽數？',
-    pvBroken: 'data/pageviews.json 無法讀取', pvTitle: '顯示每篇文章的瀏覽數',
-    pvIntro: '在網站放一個 <code>data/pageviews.json</code>，文章列表就會顯示每篇的瀏覽數，也能依瀏覽數排序。Hugo 建置時也能用同一份檔案把數字顯示在文章頁上（見說明）。',
-    pvGa4: '從 Google Analytics 4 產生（需要一個能檢視該資源的 service account），在網站資料夾執行：',
+    pvUpdate: '更新瀏覽數…', pvUpdated: '{time} 更新',
+    pvBroken: 'data/pageviews.json 無法讀取', pvTitle: '每篇文章的瀏覽數',
+    pvIntro: '網站有 <code>data/pageviews.json</code> 時，文章列表會顯示每篇的瀏覽數，也能依瀏覽數排序；Hugo 建置時也能用同一份檔案把數字顯示在文章頁上（見說明）。',
+    pvCsvTitle: '上傳 Google Analytics 4 報表',
+    pvCsvSteps: '<li>在 GA4 開啟 <b>報表 › 參與 › 網頁和畫面</b></li><li>選擇日期，例如 <b>最近 90 天</b></li><li>右上角 <b>分享此報表</b> › <b>下載檔案</b> › <b>下載 CSV</b></li><li>在這裡上傳</li>',
+    pvPick: '選擇 CSV…', pvDrop: '或拖曳到這裡', pvReading: '讀取 {name} 中…',
+    pvDone: '已寫入 data/pageviews.json：{pages} 頁、{views} 次瀏覽（統計到 {date}）。', pvKept: '另外 {kept} 頁保留上次的數字。',
+    pvCsvNote: '數字是報表期間內的瀏覽數。每次上傳會更新報表裡的頁面，報表沒有的頁面保留上次的數字與統計日期。不需要登入 Google。',
+    pvAutoTitle: '每天自動更新（GA4 API）',
+    pvGa4: '有能檢視該 GA4 資源的 service account 時，在網站資料夾執行（也能放在 CI）；這支程式也能讀下載的 CSV：',
     pvFormat: '檔案格式如下；key 是文章網址，小寫，不含 <code>.html</code> 與結尾斜線：',
     pvScript: 'ga4_pageviews.py 程式', pvDocs: '完整說明：GA4 設定、Hugo partial、每日自動更新', pvHide: '不再提示', pvClose: '關閉',
     conflictTitle: '檔案已被其他程式修改', conflictText: '這篇文章開啟後，檔案被其他程式（編輯器、AI 工具、git）改過。已暫停自動儲存，兩邊的內容都還在。',
@@ -1015,9 +1050,25 @@ async function loadPosts() {
 function renderPageviews() {
   const pv = state.pageviews;
   $('sort').hidden = !pv || !!pv.error;
-  $('pv-help').hidden = !!pv && !pv.error || (!pv && load('pvHide') === '1');
-  $('pv-help').textContent = pv?.error ? t('pvBroken') : t('pvHelp');
-  $('pv-help').title = pv?.error || '';
+  $('pv-help').hidden = !pv && load('pvHide') === '1';
+  $('pv-help').textContent = pv?.error ? t('pvBroken') : pv ? t('pvUpdate') : t('pvHelp');
+  const updated = pv?.updated && Date.parse(pv.updated);
+  $('pv-help').title = pv?.error || (updated ? t('pvUpdated', { time: ago(updated) }) : '');
+  $('pv-hide').hidden = !!pv;
+}
+
+// A report downloaded from GA4 (Pages and screens, CSV), merged into data/pageviews.json by the server.
+async function uploadPageviews(file) {
+  if (!file) return;
+  const out = $('pv-result');
+  out.hidden = false; out.classList.remove('err'); out.textContent = t('pvReading', { name: file.name });
+  try {
+    const res = await api('POST', '/api/pageviews', await file.text(), true);
+    out.textContent = t('pvDone', { pages: NUM.format(res.pages), views: NUM.format(res.views), date: res.at ? res.at.slice(0, 10) : '?' })
+      + (res.kept ? ' ' + t('pvKept', { kept: NUM.format(res.kept) }) : '');
+    await loadPosts();
+    refreshGit(0);
+  } catch (e) { out.classList.add('err'); out.textContent = e.message; }
 }
 const NUM = new Intl.NumberFormat(LANG);
 
@@ -1746,7 +1797,12 @@ $('search').oninput = renderList;
 $('filter').onchange = renderList;
 $('sort').value = load('sort') === 'views' ? 'views' : 'date';
 $('sort').onchange = e => { store('sort', e.target.value); renderList(); };
-$('pv-help').onclick = () => $('pv-dialog').showModal();
+$('pv-help').onclick = () => { $('pv-result').hidden = true; $('pv-dialog').showModal(); };
+$('pv-pick').onclick = () => $('pv-file').click();
+$('pv-file').onchange = e => { uploadPageviews(e.target.files[0]); e.target.value = ''; };
+$('pv-drop').addEventListener('dragover', e => { e.preventDefault(); $('pv-drop').classList.add('dragging'); });
+$('pv-drop').addEventListener('dragleave', () => $('pv-drop').classList.remove('dragging'));
+$('pv-drop').addEventListener('drop', e => { e.preventDefault(); $('pv-drop').classList.remove('dragging'); uploadPageviews(e.dataTransfer.files[0]); });
 $('pv-dialog').addEventListener('close', () => { if ($('pv-dialog').returnValue === 'hide') { store('pvHide', '1'); renderPageviews(); } });
 document.querySelectorAll('#views button').forEach(b => { b.onclick = () => setView(b.dataset.view); });
 // Image size for new drops: resized to that width when saved (and so shown at that width).
