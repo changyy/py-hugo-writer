@@ -9,7 +9,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from importlib import resources
 from urllib.parse import parse_qs, urlsplit
 
-from . import git, images
+from . import git, images, pageviews
 from ._version import __version__
 from .site import Conflict, SiteError, atomic_write, front_matter, get_featured, get_tags, has_raw_html, version
 
@@ -157,7 +157,11 @@ class Handler(BaseHTTPRequestHandler):
         self._json(git.status(self.server.site.root))
 
     def list_posts(self):
-        self._json({'posts': self.server.site.posts()})
+        # Views from data/pageviews.json (on copies: the listing is cached); pageviews: null without
+        # the file, else {updated} or {error}.
+        views = pageviews.load(self.server.site.root)
+        posts = [{**p, 'views': pageviews.views_of(views, p['url'])} for p in self.server.site.posts()]
+        self._json({'posts': posts, 'pageviews': views and {k: views[k] for k in ('updated', 'error') if k in views}})
 
     def get_post(self):
         rel = self._query().get('path', '')

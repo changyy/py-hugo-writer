@@ -1,0 +1,40 @@
+{{- /*
+  The page's views from data/pageviews.json (written by scripts/ga4_pageviews.py of hugo-writer),
+  e.g. "1,245 次瀏覽（3 天前統計）". Copy to layouts/partials/pageviews.html of your site and put
+  {{ partial "pageviews.html" . }} where it should show. Guide: docs/pageviews.md of hugo-writer.
+
+  Shows nothing for a page the file doesn't have, or with fewer views than params.pageviews.min:
+    [params.pageviews]
+      min = 50
+  "N hours / days / months / years ago" is worked out when Hugo builds the page, and again in the
+  browser, so it stays right however long ago the site was built.
+*/ -}}
+{{- with site.Data.pageviews }}
+  {{- /* Keyed like ga4_pageviews.py does: /a/b.html, /a/b/, /a/b/index.html and /a/b are all /a/b. */}}
+  {{- $key := $.RelPermalink | lower | strings.TrimSuffix "index.html" | strings.TrimSuffix ".html" | strings.TrimRight "/" | default "/" }}
+  {{- with index (.pages | default dict) $key }}
+    {{- $min := 0 }}
+    {{- with site.Params.pageviews }}{{ $min = .min | default 0 }}{{ end }}
+    {{- if ge .views $min }}
+      {{- $t := dict "views" "%s views" "pre" " (as of " "post" ")" "lt" "less than 1h ago" "h" "%dh ago" "d" "%dd ago" "m" "%dmo ago" "y" "%dy ago" }}
+      {{- if hasPrefix (lower site.Language.Lang) "zh" }}
+        {{- $t = dict "views" "%s 次瀏覽" "pre" "（" "post" "統計）" "lt" "不到 1 小時前" "h" "%d 小時前" "d" "%d 天前" "m" "%d 個月前" "y" "%d 年前" }}
+      {{- end }}
+      {{- $at := time .at }}
+      {{- $h := div (sub now.Unix $at.Unix) 3600 }}
+      {{- $d := div $h 24 }}
+      {{- $ago := $t.lt }}
+      {{- if ge $d 365 }}{{ $ago = printf $t.y (div $d 365) }}
+      {{- else if ge $d 30 }}{{ $ago = printf $t.m (div $d 30) }}
+      {{- else if ge $d 1 }}{{ $ago = printf $t.d $d }}
+      {{- else if ge $h 1 }}{{ $ago = printf $t.h $h }}
+      {{- end -}}
+<span class="pageviews">{{ printf $t.views (lang.FormatNumber 0 .views) }}{{ $t.pre }}<time datetime="{{ .at }}" title="{{ $at.Format "2006-01-02 15:04" }}" data-pageviews="{{ $t | jsonify }}">{{ $ago }}</time>{{ $t.post }}</span>
+<script>document.querySelectorAll('time[data-pageviews]').forEach(function (e) {
+  var t = JSON.parse(e.dataset.pageviews), h = Math.floor((Date.now() - Date.parse(e.dateTime)) / 36e5), d = Math.floor(h / 24);
+  e.textContent = d >= 365 ? t.y.replace('%d', Math.floor(d / 365)) : d >= 30 ? t.m.replace('%d', Math.floor(d / 30))
+    : d >= 1 ? t.d.replace('%d', d) : h >= 1 ? t.h.replace('%d', h) : t.lt;
+});</script>
+    {{- end }}
+  {{- end }}
+{{- end }}

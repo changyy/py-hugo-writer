@@ -1,5 +1,18 @@
 # Changelog
 
+## 1.20261018.1195452
+
+- Page views in the post list, from the site's `data/pageviews.json`: `👁 1,245` next to each post
+  (when it was counted on hover), and a "By views" sort. Without the file, "Show page views?" under
+  the site name explains how to make one.
+- `scripts/ga4_pageviews.py`, standalone (`uv run scripts/ga4_pageviews.py --property … --top 2000`):
+  each page's views of the last 5 years from Google Analytics 4, merged into `data/pageviews.json`;
+  pages left out keep their last count and its date. `/a/b.html` and `/a/b` (Cloudflare Pages) are
+  one page.
+- A Hugo partial showing them on the pages, "1,245 次瀏覽（3 天前統計）" (hours, days, months, years,
+  kept current in the browser), used by the demo site with an example `data/pageviews.json`.
+  Guide: `docs/pageviews.md`.
+
 ## 1.20261018.1195423
 
 - The toolbar keeps when the open post was saved: "Saved · 5 seconds ago" (minutes, hours; the date

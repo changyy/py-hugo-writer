@@ -46,6 +46,12 @@ aside { display: flex; flex-direction: column; min-height: 0; border-right: 1px 
 .git { display: grid; gap: 1px; color: var(--muted); font-size: 12px; }
 .git span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .git .dirty { color: var(--draft); }
+.link { border: 0; background: none; padding: 0; color: var(--accent); cursor: pointer; text-align: left; font-size: 12px; }
+.link:hover { background: none; text-decoration: underline; }
+#posts .pv { margin-left: auto; }
+#pv-dialog { width: min(640px, 92vw); }
+#pv-dialog pre { margin: 0 0 12px; padding: 8px 10px; overflow-x: auto; border-radius: 6px; background: var(--code); font: 12px/1.5 var(--mono); }
+#pv-dialog code { font: 12px var(--mono); }
 .side-foot { display: flex; gap: 8px; padding: 8px 12px; border-top: 1px solid var(--border); }
 .side-foot select { flex: 1; min-width: 0; }
 .about { padding: 0 12px 10px; font-size: 11px; }
@@ -181,6 +187,7 @@ dialog p { margin: 0 0 16px; line-height: 1.5; }
   <div class="side-head">
     <div class="row"><span class="site-name" id="site-name">…</span><button class="primary" id="new-btn" data-i18n="newPost"></button></div>
     <div class="git" id="git" hidden><span id="git-state"></span><span id="git-commit"></span></div>
+    <button class="link" id="pv-help" hidden data-i18n="pvHelp"></button>
     <input type="search" id="search" data-i18n-placeholder="search">
     <div class="row">
       <select id="filter">
@@ -188,6 +195,10 @@ dialog p { margin: 0 0 16px; line-height: 1.5; }
         <option value="drafts" data-i18n="filterDrafts"></option>
         <option value="published" data-i18n="filterPublished"></option>
         <option value="editable" data-i18n="filterEditable"></option>
+      </select>
+      <select id="sort" hidden aria-label="Sort">
+        <option value="date" data-i18n="sortDate"></option>
+        <option value="views" data-i18n="sortViews"></option>
       </select>
       <span class="count" id="count"></span>
     </div>
@@ -306,6 +317,25 @@ dialog p { margin: 0 0 16px; line-height: 1.5; }
   </div>
 </div>
 
+<dialog id="pv-dialog">
+  <h2 data-i18n="pvTitle"></h2>
+  <p data-i18n-html="pvIntro"></p>
+  <p data-i18n="pvGa4"></p>
+<pre>curl -fsSLo scripts/ga4_pageviews.py \
+  https://raw.githubusercontent.com/changyy/py-hugo-writer/main/scripts/ga4_pageviews.py
+uv run scripts/ga4_pageviews.py --property 123456789 --credentials key.json --top 2000</pre>
+  <p data-i18n-html="pvFormat"></p>
+<pre>{"updated": "2026-10-18T03:00:00+08:00", "years": 5, "pages": {
+ "/2024/05/hello-markdown": {"views": 1245, "at": "2026-10-18T03:00:00+08:00"},
+ "/2010/01/legacy": {"views": 87, "at": "2025-06-01T03:00:00+08:00"}
+}}</pre>
+  <p><a href="https://github.com/changyy/py-hugo-writer/blob/main/scripts/ga4_pageviews.py" target="_blank" rel="noopener" data-i18n="pvScript"></a>
+    · <a href="https://github.com/changyy/py-hugo-writer/blob/main/docs/pageviews.md" target="_blank" rel="noopener" data-i18n="pvDocs"></a></p>
+  <form method="dialog" class="actions">
+    <button value="hide" data-i18n="pvHide"></button>
+    <button value="close" class="primary" data-i18n="pvClose"></button>
+  </form>
+</dialog>
 <dialog id="settings-dialog">
   <form method="dialog" id="settings-form">
     <h2 data-i18n="settings"></h2>
@@ -409,6 +439,12 @@ const I18N = {
     saveFailed: 'Save failed: {error}', postUncommitted: 'not committed',
     gitNone: 'Not in git', gitClean: 'git {branch}: all committed', gitDirty: 'git {branch}: {n} file(s) not committed',
     gitLast: 'Last commit {ago}', gitNoCommit: 'No commits yet', gitMore: '… and {n} more',
+    sortDate: 'By date', sortViews: 'By views', views: '{n} views, counted {time}', pvHelp: 'Show page views?',
+    pvBroken: 'data/pageviews.json can\'t be read', pvTitle: 'Page views of every post',
+    pvIntro: 'Put a <code>data/pageviews.json</code> in the site and the post list shows each post\'s views, and sorts by them. Hugo can show the same numbers on the pages (see the guide).',
+    pvGa4: 'To make it from Google Analytics 4 (with a service account that can view the property), run in the site folder:',
+    pvFormat: 'The file looks like this; a key is the page\'s URL in lower case, without <code>.html</code> or a trailing slash:',
+    pvScript: 'ga4_pageviews.py', pvDocs: 'Guide: GA4 setup, the Hugo partial, daily updates', pvHide: 'Don\'t show again', pvClose: 'Close',
     conflictTitle: 'This post changed on disk', conflictText: 'Another program (an editor, an AI tool, git) changed this file after it was opened here. Autosave is paused so neither version is lost.',
     conflictReload: 'Load the file (drop my edits)', conflictOverwrite: 'Overwrite with my version', conflictLater: 'Decide later',
     conflictStatus: 'Changed on disk, autosave paused (click)', conflictDiscard: 'Your edits to this post are not saved (it changed on disk). Drop them and open the other post?',
@@ -462,6 +498,12 @@ const I18N = {
     saveFailed: '儲存失敗：{error}', postUncommitted: '尚未 commit',
     gitNone: '未使用 git 管理', gitClean: 'git {branch}：已全部 commit', gitDirty: 'git {branch}：{n} 個檔案尚未 commit',
     gitLast: '上次 commit：{ago}', gitNoCommit: '尚未有任何 commit', gitMore: '…還有 {n} 個',
+    sortDate: '依日期', sortViews: '依瀏覽數', views: '{n} 次瀏覽，{time} 統計', pvHelp: '如何顯示瀏覽數？',
+    pvBroken: 'data/pageviews.json 無法讀取', pvTitle: '顯示每篇文章的瀏覽數',
+    pvIntro: '在網站放一個 <code>data/pageviews.json</code>，文章列表就會顯示每篇的瀏覽數，也能依瀏覽數排序。Hugo 建置時也能用同一份檔案把數字顯示在文章頁上（見說明）。',
+    pvGa4: '從 Google Analytics 4 產生（需要一個能檢視該資源的 service account），在網站資料夾執行：',
+    pvFormat: '檔案格式如下；key 是文章網址，小寫，不含 <code>.html</code> 與結尾斜線：',
+    pvScript: 'ga4_pageviews.py 程式', pvDocs: '完整說明：GA4 設定、Hugo partial、每日自動更新', pvHide: '不再提示', pvClose: '關閉',
     conflictTitle: '檔案已被其他程式修改', conflictText: '這篇文章開啟後，檔案被其他程式（編輯器、AI 工具、git）改過。已暫停自動儲存，兩邊的內容都還在。',
     conflictReload: '載入檔案（捨棄我的修改）', conflictOverwrite: '用我的版本覆蓋', conflictLater: '稍後再決定',
     conflictStatus: '檔案已被修改，暫停自動儲存（點此處理）', conflictDiscard: '這篇的修改尚未儲存（檔案已被其他程式修改）。要捨棄修改並開啟另一篇嗎？',
@@ -963,9 +1005,21 @@ function layout() {
 // -- post list ----------------------------------------------------------------
 
 async function loadPosts() {
-  state.posts = (await api('GET', '/api/posts')).posts;
+  const res = await api('GET', '/api/posts');
+  state.posts = res.posts; state.pageviews = res.pageviews;
+  renderPageviews();
   renderList();
 }
+
+// Views come from data/pageviews.json; without it, a link explains how to make one.
+function renderPageviews() {
+  const pv = state.pageviews;
+  $('sort').hidden = !pv || !!pv.error;
+  $('pv-help').hidden = !!pv && !pv.error || (!pv && load('pvHide') === '1');
+  $('pv-help').textContent = pv?.error ? t('pvBroken') : t('pvHelp');
+  $('pv-help').title = pv?.error || '';
+}
+const NUM = new Intl.NumberFormat(LANG);
 
 function renderList() {
   const q = $('search').value.trim().toLowerCase();
@@ -973,6 +1027,7 @@ function renderList() {
   const shown = state.posts.filter(p =>
     (!q || p.title.toLowerCase().includes(q) || p.path.toLowerCase().includes(q)) &&
     (f === 'all' || (f === 'drafts' && p.draft) || (f === 'published' && !p.draft) || (f === 'editable' && p.editable)));
+  if ($('sort').value === 'views' && !$('sort').hidden) shown.sort((a, b) => (b.views?.views || 0) - (a.views?.views || 0));
   $('count').textContent = `${shown.length} / ${state.posts.length}`;
   $('posts').replaceChildren(...shown.slice(0, 500).map(p => {
     const li = document.createElement('li');
@@ -982,6 +1037,12 @@ function renderList() {
     meta.append(p.date.slice(0, 10));
     if (p.draft) { const b = document.createElement('span'); b.className = 'badge'; b.textContent = t('badgeDraft'); meta.append(b); }
     if (!p.editable) { const b = document.createElement('span'); b.className = 'badge ro'; b.textContent = t('badgeReadOnly'); meta.append(b); }
+    if (p.views) {
+      const v = document.createElement('span'); v.className = 'pv'; v.textContent = '👁 ' + NUM.format(p.views.views);
+      const at = Date.parse(p.views.at);
+      v.title = t('views', { n: NUM.format(p.views.views), time: at ? ago(at) : '?' });
+      meta.append(v);
+    }
     li.append(name, meta);
     li.onclick = () => openPost(p.path);
     return li;
@@ -1683,6 +1744,10 @@ window.addEventListener('beforeunload', e => { if (state.dirty) { save(); e.prev
 $('draft').onchange = e => setDraft(e.target.checked);
 $('search').oninput = renderList;
 $('filter').onchange = renderList;
+$('sort').value = load('sort') === 'views' ? 'views' : 'date';
+$('sort').onchange = e => { store('sort', e.target.value); renderList(); };
+$('pv-help').onclick = () => $('pv-dialog').showModal();
+$('pv-dialog').addEventListener('close', () => { if ($('pv-dialog').returnValue === 'hide') { store('pvHide', '1'); renderPageviews(); } });
 document.querySelectorAll('#views button').forEach(b => { b.onclick = () => setView(b.dataset.view); });
 // Image size for new drops: resized to that width when saved (and so shown at that width).
 $('imgsize').value = ['0', '512', '256', '128'].includes(load('imgsize')) ? load('imgsize') : '0';

@@ -234,3 +234,14 @@ def test_reports_git_status_and_the_post_mtime(app):
     post = json.loads(request(app, 'GET', f'/api/post?path={BUNDLE}')[2])
     assert post['mtime'] == app.site.resolve(BUNDLE).stat().st_mtime
 
+
+def test_lists_page_views_from_data_pageviews_json(app):
+    data = json.loads(request(app, 'GET', '/api/posts')[2])
+    views = {p['url']: p['views'] for p in data['posts']}
+    assert data['pageviews']['updated'] and views['/2024/05/hello-markdown.html']['views'] == 1245
+    assert views['/2010/01/legacy.html']['at'].startswith('2025') and views['/posts/2024/06/a-draft/'] is None
+    (app.site.root / 'data' / 'pageviews.json').write_text('{oops')
+    assert 'error' in json.loads(request(app, 'GET', '/api/posts')[2])['pageviews']
+    (app.site.root / 'data' / 'pageviews.json').unlink()
+    data = json.loads(request(app, 'GET', '/api/posts')[2])
+    assert data['pageviews'] is None and all(p['views'] is None for p in data['posts'])

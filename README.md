@@ -39,6 +39,7 @@ to your content folder. No server to host, no account, no database — just your
 | 8b | Settings in the UI | image naming, maximum width, format, quality, metadata — saved to `.hugo-writer.toml` |
 | 9 | Autosave, and the open post stays in the address | a second after you stop typing, or ⌘S / Ctrl+S; reloading comes back to the same post |
 | 9a | When the post was saved, and what git has not got yet | "Saved · 5 seconds ago" (the exact time on hover); under the site name: in git or not, how many files are not committed, the last commit |
+| 9b | Page views per post, sorted by them if you like | from the site's `data/pageviews.json`, e.g. written from GA4 by [`scripts/ga4_pageviews.py`](./scripts/ga4_pageviews.py) |
 | 10 | English and Traditional Chinese UI | follows the browser language; switch at the bottom left |
 
 Only Markdown posts are editable. Other content files (HTML, Org, …) are listed and
@@ -240,6 +241,14 @@ featured_default = "first"             # "first": the first dropped image become
 
 `{year}`, `{month}`, `{day}` and `{slug}` are filled in when the post is created.
 
+### 6. Page views from GA4 (optional)
+
+With a `data/pageviews.json` in the site, the post list shows each post's views and can sort
+by them; without one, "Show page views?" under the site name explains how to make it.
+[`scripts/ga4_pageviews.py`](./scripts/ga4_pageviews.py) writes it from Google Analytics 4
+(merging into the last run, so `--top 2000` is enough), and a Hugo partial shows the same numbers
+on the pages: `1,245 次瀏覽（3 天前統計）`. See [docs/pageviews.md](./docs/pageviews.md).
+
 ---
 
 ## Development
@@ -280,9 +289,12 @@ py-hugo-writer/
     preview.py            the private `hugo server`
     server.py             local HTTP server and JSON API
     git.py                whether the site is in git, what is not committed
+    pageviews.py          reads data/pageviews.json for the post list
     static/index.html     the editor (single page)
     static/vendor/        TOAST UI Editor 3.2.2
   examples/demo-site/     sample Hugo site for trying it out and for tests
+  scripts/ga4_pageviews.py  page views from GA4 into a site's data/pageviews.json (standalone)
+  docs/pageviews.md       how to fetch and show page views
   tests/
 ```
 
