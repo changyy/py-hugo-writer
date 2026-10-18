@@ -19,9 +19,16 @@
   The featured image is the post's cover.image (PaperMod) or its first images entry (Hugo's own):
   a full URL, a file in the post's folder, or a path from the site root. Posts are those of
   site.MainSections; keys are matched the way pageviews.html does. Shows nothing without
-  data/pageviews.json, or when no post has a count. Colors follow PaperMod's variables when there.
+  data/pageviews.json, when no post has a count, or with popular_posts = false in .hugo-writer.toml
+  (hugo-writer's switch; where they show is up to the templates calling this). Colors follow
+  PaperMod's variables when there.
 */ -}}
 {{- $args := cond (reflect.IsMap .) . dict }}
+{{- $writer := dict }}
+{{- if fileExists ".hugo-writer.toml" }}
+  {{- $writer = resources.FromString "hugo-writer.toml" (os.ReadFile ".hugo-writer.toml") | transform.Unmarshal }}
+{{- end }}
+{{- if ne (index $writer "popular_posts") false }}
 {{- with site.Data.pageviews }}
   {{- $pages := .pages | default dict }}
   {{- $count := $args.count | default 10 }}
@@ -115,4 +122,5 @@
 })(document.currentScript.previousElementSibling);
 </script>
   {{- end }}
+{{- end }}
 {{- end }}

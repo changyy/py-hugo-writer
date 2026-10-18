@@ -148,6 +148,15 @@ def test_the_top_partial_lists_the_most_viewed_posts(site_dir):
     assert 'embedded video' in top and 'Hello, Markdown' not in top and 'legacy HTML' not in top and '<h2>' not in top
     assert '<span class="pageviews-top-views">5</span>' in top
 
+    # hugo-writer's switch: popular_posts = false in .hugo-writer.toml hides them, true shows them.
+    settings = site_dir / '.hugo-writer.toml'
+    settings.write_text(settings.read_text() + 'popular_posts = false\n')
+    assert 'pageviews-top' not in home()
+    settings.write_text(settings.read_text().replace('popular_posts = false', 'popular_posts = true'))
+    assert 'pageviews-top' in home()
+    settings.unlink()
+    assert 'pageviews-top' in home()
+
     # Without the file, or with nothing in it, the site builds and shows nothing.
     for data in ('{}', '{"pages": {}}', None):
         if data is None:

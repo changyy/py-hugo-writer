@@ -1,5 +1,14 @@
 # Changelog
 
+## 1.20261018.1225024
+
+- A switch for the popular posts in the page views dialog, "Show the popular posts on the site":
+  `popular_posts` in `.hugo-writer.toml`, which `pageviews-top.html` reads at build time. Off, the
+  partial shows nothing wherever it is called; the templates stay as they are. Switching rewrites
+  `data/pageviews.json` as it is, so a running `hugo server` rebuilds.
+- The dialog tells which templates call the partial (layouts and themes), that none does yet, or
+  that the site doesn't have it, with how to place it: on the home page, or under each post.
+
 ## 1.20261018.1224014
 
 - A Hugo partial for the most viewed posts, `pageviews-top.html`: a row of cards that scrolls

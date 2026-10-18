@@ -60,6 +60,10 @@ aside { display: flex; flex-direction: column; min-height: 0; border-right: 1px 
 .pv-upload.dragging { border-color: var(--accent); background: var(--hover); }
 .pv-result { font-size: 13px; }
 .pv-ga4 { font-weight: 600; }
+#pv-dialog label.pv-top-switch { display: flex; align-items: center; gap: 6px; margin-bottom: 6px; }
+#pv-dialog label.pv-top-switch input { width: auto; }
+.pv-top-where { font-size: 13px; margin: 0 0 6px; }
+.pv-top-where.warn { color: var(--draft); }
 .pv-ga4-line { display: flex; gap: 12px; align-items: baseline; }
 .pv-ga4-set { display: flex; gap: 8px; margin-bottom: 4px; }
 .pv-ga4-set input { flex: 1; min-width: 0; }
@@ -349,6 +353,18 @@ dialog p { margin: 0 0 16px; line-height: 1.5; }
   </div>
   <p class="pv-result" id="pv-result" hidden></p>
   <p class="hint" data-i18n="pvCsvNote"></p>
+  <h3 data-i18n="pvTopTitle"></h3>
+  <label class="pv-top-switch"><input type="checkbox" id="pv-top"> <span data-i18n="pvTopShow"></span></label>
+  <p class="pv-top-where" id="pv-top-where"></p>
+  <details id="pv-top-how">
+    <summary data-i18n="pvTopHow"></summary>
+    <p data-i18n-html="pvTopHowText"></p>
+<pre>{{ partial "pageviews-top.html" (dict "count" 10 "days" 120) }}</pre>
+    <p data-i18n-html="pvTopHowSingle"></p>
+<pre>{{ partial "pageviews-top.html" (dict "count" 10 "days" 120 "exclude" . "title" "…") }}</pre>
+    <p><a href="https://github.com/changyy/py-hugo-writer/blob/main/examples/demo-site/layouts/partials/pageviews-top.html" target="_blank" rel="noopener">pageviews-top.html ↗</a>
+      · <a href="https://github.com/changyy/py-hugo-writer/blob/main/docs/pageviews.md#popular-posts" target="_blank" rel="noopener" data-i18n="pvTopDocs"></a></p>
+  </details>
   <details>
     <summary data-i18n="pvAutoTitle"></summary>
     <p data-i18n="pvGa4"></p>
@@ -478,6 +494,12 @@ const I18N = {
     sortDate: 'By date', sortViews: 'By views', views: '{n} views, counted {time}', pvHelp: 'Show page views?',
     pvUpdate: 'Update page views…', pvUpdated: 'Updated {time}',
     pvOpenGa4: 'Open Pages and screens in GA4 (last 90 days) ↗', pvGa4Change: 'Change',
+    pvTopTitle: 'Popular posts', pvTopShow: 'Show the popular posts on the site',
+    pvTopUsed: 'Shown where these templates put it: {files}', pvTopUnused: 'The site has {file}, but no template calls it yet.',
+    pvTopMissing: 'The site has no pageviews-top.html yet: copy it into layouts/partials/ and call it where the posts should go.',
+    pvTopOff: 'Hidden: the templates stay as they are, the partial shows nothing.',
+    pvTopHow: 'Where to put them', pvTopHowText: 'Your templates decide where. A row of cards fits the home page; with PaperMod, in <code>layouts/partials/home_info.html</code>:',
+    pvTopHowSingle: 'Or under each post (in <code>single.html</code>), leaving out the post itself:', pvTopDocs: 'Guide',
     pvGa4Placeholder: 'Paste the address of a GA4 report of this site',
     pvGa4Unset: 'Paste the address of any GA4 report of this site (or its property ID), and this becomes a link straight to the report. Kept in .hugo-writer.toml.',
     setGa4: 'GA4 property', setGa4Placeholder: 'Paste a GA4 report address, or the property ID',
@@ -549,6 +571,12 @@ const I18N = {
     sortDate: '依日期', sortViews: '依瀏覽數', views: '{n} 次瀏覽，{time} 統計', pvHelp: '如何顯示瀏覽數？',
     pvUpdate: '更新瀏覽數…', pvUpdated: '{time} 更新',
     pvOpenGa4: '在 GA4 開啟「網頁和畫面」（最近 90 天）↗', pvGa4Change: '變更',
+    pvTopTitle: '熱門文章', pvTopShow: '在網站上顯示熱門文章',
+    pvTopUsed: '顯示位置由這些版型決定：{files}', pvTopUnused: '網站有 {file}，但還沒有版型使用它。',
+    pvTopMissing: '網站還沒有 pageviews-top.html：請把它複製到 layouts/partials/，再自行安排放在哪裡。',
+    pvTopOff: '已隱藏：版型不用改，熱門文章不會輸出。',
+    pvTopHow: '要放在哪裡？', pvTopHowText: '由你的版型決定。橫向卡片適合放在首頁，例如 PaperMod 的 <code>layouts/partials/home_info.html</code>：',
+    pvTopHowSingle: '也可以放在每篇文章底部（<code>single.html</code>），排除目前這篇：', pvTopDocs: '說明',
     pvGa4Placeholder: '貼上這個網站任一張 GA4 報表的網址',
     pvGa4Unset: '貼上這個網站任一張 GA4 報表的網址（或資源 ID），這裡就會變成直接開啟報表的連結。存在 .hugo-writer.toml。',
     setGa4: 'GA4 資源', setGa4Placeholder: '貼上 GA4 報表的網址，或資源 ID',
@@ -1846,7 +1874,26 @@ async function saveGa4(value) {
 $('pv-ga4-change').onclick = () => { renderGa4Link(true); $('pv-ga4-input').select(); };
 $('pv-ga4-save').onclick = () => saveGa4($('pv-ga4-input').value);
 $('pv-ga4-input').addEventListener('keydown', e => { if (e.key === 'Enter' && !e.isComposing) { e.preventDefault(); saveGa4(e.target.value); } });
-$('pv-help').onclick = () => { renderGa4Link(false); $('pv-result').hidden = true; $('pv-dialog').showModal(); };
+// Popular posts: a switch the partial reads, and where the site's templates put it.
+async function renderTopPosts() {
+  const on = state.info?.settings.popular_posts !== false, where = $('pv-top-where');
+  $('pv-top').checked = on;
+  where.classList.remove('warn');
+  where.textContent = '';
+  let tpl;
+  try { tpl = await api('GET', '/api/pageviews/templates'); } catch (e) { where.textContent = e.message; return; }
+  if (!on) where.textContent = t('pvTopOff');
+  else if (!tpl.partial) { where.textContent = t('pvTopMissing'); where.classList.add('warn'); }
+  else if (!tpl.used_in.length) { where.textContent = t('pvTopUnused', { file: tpl.partial }); where.classList.add('warn'); }
+  else where.textContent = t('pvTopUsed', { files: tpl.used_in.join(', ') });
+  $('pv-top-how').open = !tpl.partial || !tpl.used_in.length;
+}
+$('pv-top').onchange = async e => {
+  try { state.info.settings = (await api('POST', '/api/settings', { popular_posts: e.target.checked })).settings; }
+  catch (err) { e.target.checked = !e.target.checked; status(err.message, true); }
+  renderTopPosts();
+};
+$('pv-help').onclick = () => { renderGa4Link(false); renderTopPosts(); $('pv-result').hidden = true; $('pv-dialog').showModal(); };
 $('pv-pick').onclick = () => $('pv-file').click();
 $('pv-file').onchange = e => { uploadPageviews(e.target.files[0]); e.target.value = ''; };
 $('pv-drop').addEventListener('dragover', e => { e.preventDefault(); $('pv-drop').classList.add('dragging'); });

@@ -60,6 +60,9 @@ class Settings:
     # The site's GA4 property, as in the address of a GA4 report (a123456789p987654321, or p987654321),
     # for the editor's link to the Pages and screens report; empty for none.
     ga4_property: str = ''
+    # Show the popular posts (the pageviews-top.html partial reads this file; where they go is up to
+    # the templates that call it). False hides them without touching the templates.
+    popular_posts: bool = True
 
     @classmethod
     def load(cls, root: Path) -> 'Settings':

@@ -238,6 +238,7 @@ strip_metadata = true                  # false keeps EXIF (camera, GPS, …) in 
 featured_field = "images"              # front matter key for the featured image, e.g. "cover.image"
 featured_default = "first"             # "first": the first dropped image becomes it; "none"
 ga4_property = "a123456789p987654321"  # from a GA4 report's address: links to Pages and screens
+popular_posts = true                   # false hides the pageviews-top.html partial's popular posts
 ```
 
 `{year}`, `{month}`, `{day}` and `{slug}` are filled in when the post is created.

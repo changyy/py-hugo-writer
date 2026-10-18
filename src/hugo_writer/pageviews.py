@@ -85,6 +85,26 @@ def merge(old: dict, views: dict[str, int], years: int | None, now: datetime, at
     return {k: v for k, v in data.items() if v is not None}
 
 
+def templates(root: Path) -> dict:
+    """Where the site (or its theme) has the pageviews-top.html partial, and which templates call it."""
+    partial, used = None, []
+    for layouts in [root / 'layouts', *sorted((root / 'themes').glob('*/layouts'))]:
+        for file in sorted(layouts.rglob('*.html')) if layouts.is_dir() else []:
+            rel = file.relative_to(root).as_posix()
+            if file.name == 'pageviews-top.html' and file.parent.name in ('partials', '_partials'):
+                partial = partial or rel
+            elif 'pageviews-top.html' in file.read_text(encoding='utf-8', errors='replace'):
+                used.append(rel)
+    return {'partial': partial, 'used_in': used}
+
+
+def touch(root: Path) -> None:
+    """Rewrite data/pageviews.json as it is, so a running hugo server rebuilds (a setting changed)."""
+    file = root / FILE
+    if file.is_file():
+        file.write_bytes(file.read_bytes())
+
+
 def merge_csv(root: Path, text: str) -> dict:
     """Merge a downloaded report into the site's data/pageviews.json; what was read and what was kept."""
     views, at = read_csv(text)

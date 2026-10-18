@@ -132,7 +132,16 @@ or only the title, larger, when it has none or the image doesn't load; all cards
 The featured image is `cover.image` (PaperMod) or the first of `images`: a full URL, a file in the
 post's folder, or a path from the site root.
 Without `data/pageviews.json`, or with no post in it, it prints nothing and the site builds as
-before. Its CSS comes with it and uses PaperMod's colors (light and dark) when they are there;
+before.
+
+Where it shows is up to your templates: the cards suit the home page, and fit under each post too
+(`single.html`, with `"exclude" .` and a title such as "大家也在看"). hugo-writer's page views dialog
+has a switch for them, **Show the popular posts on the site**, kept as `popular_posts` in
+`.hugo-writer.toml`, which the partial reads: off, it shows nothing wherever it is called, and
+the templates stay as they are. The dialog also tells which templates call the partial, or that
+the site doesn't have it yet.
+
+Its CSS comes with it and uses PaperMod's colors (light and dark) when they are there;
 override `.pageviews-top-*` to change it.
 
 ## 4. Every day, on GitHub Actions

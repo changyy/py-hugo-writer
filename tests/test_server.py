@@ -257,3 +257,18 @@ def test_merges_a_report_uploaded_from_ga4(app):
     assert data['pages']['/2026/05/big']['views'] == 1234 and data['pages']['/2024/05/hello-markdown']['views'] == 1245
     assert request(app, 'POST', '/api/pageviews', b'not,a report\n1,2\n', {'X-Hugo-Writer': '1'})[0] == 400
     assert request(app, 'POST', '/api/pageviews', REPORT.encode())[0] == 403
+
+
+def test_popular_posts_switch_and_where_templates_put_them(app):
+    root = app.site.root
+    tpl = json.loads(request(app, 'GET', '/api/pageviews/templates')[2])
+    assert tpl == {'partial': 'layouts/partials/pageviews-top.html', 'used_in': ['layouts/index.html']}
+    data = root / 'data' / 'pageviews.json'
+    before = data.stat().st_mtime_ns
+    time.sleep(0.01)
+    status, _, body = request(app, 'POST', '/api/settings', json.dumps({'popular_posts': False}), WRITE)
+    assert status == 200 and json.loads(body)['settings']['popular_posts'] is False
+    assert 'popular_posts = false' in (root / '.hugo-writer.toml').read_text()
+    assert data.stat().st_mtime_ns > before          # rewritten as it was, so hugo server rebuilds
+    (root / 'layouts' / 'partials' / 'pageviews-top.html').unlink()
+    assert json.loads(request(app, 'GET', '/api/pageviews/templates')[2])['partial'] is None

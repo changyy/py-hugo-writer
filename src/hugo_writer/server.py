@@ -163,6 +163,9 @@ class Handler(BaseHTTPRequestHandler):
         posts = [{**p, 'views': pageviews.views_of(views, p['url'])} for p in self.server.site.posts()]
         self._json({'posts': posts, 'pageviews': views and {k: views[k] for k in ('updated', 'error') if k in views}})
 
+    def pageviews_templates(self):
+        self._json(pageviews.templates(self.server.site.root))
+
     def upload_pageviews(self):
         # The body: a report downloaded from GA4 (Pages and screens, as CSV).
         self._json(pageviews.merge_csv(self.server.site.root, self._body().decode('utf-8-sig')))
@@ -255,7 +258,10 @@ class Handler(BaseHTTPRequestHandler):
 
     def save_settings(self):
         site = self.server.site
-        site.settings = site.settings.save(site.root, json.loads(self._body()))
+        changes = json.loads(self._body())
+        site.settings = site.settings.save(site.root, changes)
+        if 'popular_posts' in changes:      # read by the partial at build time; hugo server doesn't watch the file
+            pageviews.touch(site.root)
         self._json({'settings': vars(site.settings)})
 
     def upload_image(self):
@@ -277,7 +283,8 @@ class Handler(BaseHTTPRequestHandler):
 
 GET_ROUTES = {'/': Handler.index, '/api/info': Handler.info, '/api/posts': Handler.list_posts,
               '/api/post': Handler.get_post, '/api/images': Handler.list_images, '/api/library': Handler.library,
-              '/api/tags': Handler.list_tags, '/api/git': Handler.git_status}
+              '/api/tags': Handler.list_tags, '/api/git': Handler.git_status,
+              '/api/pageviews/templates': Handler.pageviews_templates}
 POST_ROUTES = {'/api/post': Handler.create_post, '/api/draft': Handler.draft, '/api/image': Handler.upload_image,
                '/api/image/delete': Handler.delete_image, '/api/image/rename': Handler.rename_image,
                '/api/library/delete': Handler.library_delete, '/api/settings': Handler.save_settings,
