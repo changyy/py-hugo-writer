@@ -248,8 +248,9 @@ With a `data/pageviews.json` in the site, the post list shows each post's views 
 by them. "Show page views?" (or "Update page views…") under the site name takes a report
 downloaded from GA4 (Pages and screens, CSV) and merges it into the file, no Google sign-in needed.
 [`scripts/ga4_pageviews.py`](./scripts/ga4_pageviews.py) writes it from Google Analytics 4
-(merging into the last run, so `--top 2000` is enough), and a Hugo partial shows the same numbers
-on the pages: `1,245 次瀏覽（3 天前統計）`. See [docs/pageviews.md](./docs/pageviews.md).
+(merging into the last run, so `--top 2000` is enough), and Hugo partials show the same numbers
+on the pages, `1,245 次瀏覽（3 天前統計）`, and the most viewed posts on the home page. See
+[docs/pageviews.md](./docs/pageviews.md).
 
 ---
 

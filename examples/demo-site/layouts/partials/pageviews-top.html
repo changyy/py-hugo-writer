@@ -1,0 +1,118 @@
+{{- /*
+  The most viewed posts as a row of cards that scrolls sideways, from data/pageviews.json (written by
+  hugo-writer or scripts/ga4_pageviews.py). A card shows the post's featured image and title, or just
+  the title, larger, when it has no image (or the image doesn't load). Copy to layouts/partials/
+  pageviews-top.html of your site and call it, e.g. on the home page:
+
+    {{ partial "pageviews-top.html" . }}
+    {{ partial "pageviews-top.html" (dict "count" 10 "days" 120 "exclude" .) }}
+
+    count    how many (default 10)
+    days     only counts taken in the last N days, so a post read a lot long ago doesn't stay on
+             top; 0 for all (default 0)
+    min      fewer views than this are left out (default params.pageviews.min, or 1)
+    exclude  a page to leave out, e.g. the one it is shown on
+    title    the heading (default 熱門文章 / Popular posts; "" for none)
+    views    true to show each post's views (default false)
+
+  < and > buttons page through the row (a few lines of JavaScript; without it, the row still scrolls).
+  The featured image is the post's cover.image (PaperMod) or its first images entry (Hugo's own):
+  a full URL, a file in the post's folder, or a path from the site root. Posts are those of
+  site.MainSections; keys are matched the way pageviews.html does. Shows nothing without
+  data/pageviews.json, or when no post has a count. Colors follow PaperMod's variables when there.
+*/ -}}
+{{- $args := cond (reflect.IsMap .) . dict }}
+{{- with site.Data.pageviews }}
+  {{- $pages := .pages | default dict }}
+  {{- $count := $args.count | default 10 }}
+  {{- $days := $args.days | default 0 }}
+  {{- $min := 1 }}
+  {{- with site.Params.pageviews }}{{ $min = .min | default 1 }}{{ end }}
+  {{- with $args.min }}{{ $min = . }}{{ end }}
+  {{- $exclude := "" }}
+  {{- with $args.exclude }}{{ $exclude = .RelPermalink }}{{ end }}
+  {{- $rows := slice }}
+  {{- range where site.RegularPages "Section" "in" site.MainSections }}
+    {{- $page := . }}
+    {{- $key := .RelPermalink | lower | strings.TrimSuffix "index.html" | strings.TrimSuffix ".html" | strings.TrimRight "/" | default "/" }}
+    {{- with index $pages $key }}
+      {{- $at := time .at }}
+      {{- $fresh := or (not $days) (le (sub now.Unix $at.Unix) (mul $days 86400)) }}
+      {{- if and $fresh (ge .views $min) (ne $page.RelPermalink $exclude) }}
+        {{- $rows = $rows | append (dict "page" $page "views" .views) }}
+      {{- end }}
+    {{- end }}
+  {{- end }}
+  {{- with $rows }}
+    {{- $zh := hasPrefix (lower site.Language.Lang) "zh" }}
+    {{- $title := cond (isset $args "title") $args.title (cond $zh "熱門文章" "Popular posts") }}
+<style>
+.pageviews-top { margin: 16px 0; }
+.pageviews-top h2 { margin: 0 0 10px; font-size: 1.1em; }
+/* No scrollbar (Windows shows one always): < and > page the row, and it still scrolls by swipe and trackpad. */
+.pageviews-top-row { display: flex; gap: 12px; overflow-x: auto; scroll-snap-type: x mandatory; overscroll-behavior-x: contain;
+  scrollbar-width: none; -webkit-overflow-scrolling: touch; }
+.pageviews-top-row::-webkit-scrollbar { display: none; }
+.pageviews-top-card { flex: 0 0 220px; height: 190px; display: flex; flex-direction: column; scroll-snap-align: start;
+  overflow: hidden; border-radius: 10px; border: 1px solid var(--border, #e5e5e5); background: var(--entry, #fff);
+  color: var(--primary, inherit); text-decoration: none; box-shadow: none; }
+.pageviews-top-card:hover { border-color: var(--secondary, #999); }
+.pageviews-top-card img { width: 100%; height: 124px; object-fit: cover; margin: 0; border-radius: 0; background: var(--code-bg, #f2f2f2); }
+.pageviews-top-title { margin: 8px 10px; font-size: 14px; line-height: 1.4; display: -webkit-box; -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2; overflow: hidden; }
+/* margin, not padding: line-clamp hides the lines past the box, and a padding would show the next one's top */
+.pageviews-top-card.noimg { background: var(--tertiary, #f2f2f2); justify-content: center; }
+.pageviews-top-card.noimg .pageviews-top-title { margin: 14px; font-size: 16px; font-weight: 600; -webkit-line-clamp: 5; }
+.pageviews-top-views { padding: 0 10px 8px; margin-top: auto; font-size: 12px; color: var(--secondary, #888); }
+.pageviews-top-scroller { position: relative; }
+.pageviews-top-page { position: absolute; top: 50%; transform: translateY(-60%); z-index: 1; width: 36px; height: 36px; padding: 0;
+  border-radius: 50%; border: 1px solid var(--border, #ddd); background: var(--entry, #fff); color: var(--primary, #333);
+  font-size: 20px; line-height: 1; cursor: pointer; box-shadow: 0 2px 8px rgb(0 0 0 / .15); }
+.pageviews-top-page:hover { background: var(--tertiary, #f2f2f2); }
+.pageviews-top-page.prev { left: -12px; }
+.pageviews-top-page.next { right: -12px; }
+.pageviews-top-page[hidden] { display: none; }
+</style>
+<section class="pageviews-top">
+  {{- with $title }}<h2>{{ . }}</h2>{{ end }}
+  <div class="pageviews-top-scroller">
+  <button type="button" class="pageviews-top-page prev" aria-label="{{ cond $zh "上一頁" "Previous" }}" hidden>&lsaquo;</button>
+  <div class="pageviews-top-row">
+    {{- range first $count (sort . "views" "desc") }}
+      {{- $page := .page }}
+      {{- $img := "" }}
+      {{- with .page.Params.cover }}{{ with .image }}{{ $img = . }}{{ end }}{{ end }}
+      {{- if not $img }}{{ with .page.Params.images }}{{ $img = cond (reflect.IsSlice .) (index . 0) . }}{{ end }}{{ end }}
+      {{- $src := "" }}
+      {{- with $img }}
+        {{- if or (hasPrefix . "http://") (hasPrefix . "https://") (hasPrefix . "/") }}{{ $src = . }}
+        {{- else }}{{ with $page.Resources.Get . }}{{ $src = .RelPermalink }}{{ end }}{{ end }}
+      {{- end }}
+    <a class="pageviews-top-card{{ if not $src }} noimg{{ end }}" href="{{ .page.RelPermalink }}">
+      {{- with $src }}<img src="{{ . }}" alt="" loading="lazy" onerror="this.parentNode.classList.add('noimg');this.remove()">{{ end -}}
+      <span class="pageviews-top-title">{{ .page.LinkTitle }}</span>
+      {{- if $args.views }}<span class="pageviews-top-views">{{ lang.FormatNumber 0 .views }}</span>{{ end -}}
+    </a>
+    {{- end }}
+  </div>
+  <button type="button" class="pageviews-top-page next" aria-label="{{ cond $zh "下一頁" "Next" }}" hidden>&rsaquo;</button>
+  </div>
+</section>
+<script>
+(function (s) {
+  // < and > scroll the row by about its width, and show only when there is more that way.
+  var row = s.querySelector('.pageviews-top-row'), prev = s.querySelector('.prev'), next = s.querySelector('.next');
+  function update() {
+    prev.hidden = row.scrollLeft <= 1;
+    next.hidden = row.scrollLeft + row.clientWidth >= row.scrollWidth - 1;
+  }
+  function page(dir) { row.scrollBy({ left: dir * row.clientWidth * 0.9, behavior: 'smooth' }); }
+  prev.onclick = function () { page(-1); };
+  next.onclick = function () { page(1); };
+  row.addEventListener('scroll', update, { passive: true });
+  window.addEventListener('resize', update);
+  update();
+})(document.currentScript.previousElementSibling);
+</script>
+  {{- end }}
+{{- end }}

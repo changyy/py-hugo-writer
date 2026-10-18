@@ -1,0 +1,3 @@
+{{ define "main" }}<h1>{{ .Title }}</h1>
+{{ partial "pageviews-top.html" (dict "count" 5) }}
+<ul>{{ range .RegularPages }}<li><a href="{{ .RelPermalink }}">{{ .Title }}</a></li>{{ end }}</ul>{{ end }}

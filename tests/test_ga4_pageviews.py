@@ -115,3 +115,43 @@ def test_hugo_writer_reads_reports_and_merges_as_the_script_does():
     views, at = ga4.read_csv(REPORT)
     assert pageviews.merge(old, views, None, NOW, at) == ga4.merge(old, views, None, NOW, at)
     assert pageviews.merge(old, views, 3, NOW) == ga4.merge(old, views, 3, NOW)
+
+
+@needs_hugo
+def test_the_top_partial_lists_the_most_viewed_posts(site_dir):
+    def home():
+        subprocess.run([HUGO, '--quiet', '--destination', 'public'], cwd=site_dir, check=True, capture_output=True)
+        return (site_dir / 'public' / 'index.html').read_text()
+
+    # The demo's example: posts only (not the home page's count), most viewed first, as cards.
+    html = home()
+    top = html[html.index('<section class="pageviews-top">'):html.index('</section>')]
+    assert top.index('Hello, Markdown') < top.index('embedded video') < top.index('legacy HTML')
+    assert top.count('class="pageviews-top-card noimg"') == 3 and '1,245' not in top and 'pageviews-top-page next' in top
+
+    # A featured image makes a picture card: a file of the post's folder, by where it is published.
+    post = site_dir / 'content/posts/2024/05/hello-markdown/index.md'
+    post.write_text(post.read_text().replace('tags: ["demo"]', 'tags: ["demo"]\nimages: ["sample.webp"]'))
+    top = home()
+    assert '<a class="pageviews-top-card" href="/2024/05/hello-markdown.html"><img src="/2024/05/hello-markdown/sample.webp"' in top
+    assert (site_dir / 'public/2024/05/hello-markdown/sample.webp').is_file()
+
+    # days: a count older than that is left out; exclude and count work too.
+    (site_dir / 'layouts' / 'index.html').write_text(
+        '{{ define "main" }}{{ partial "pageviews-top.html" (dict "days" 30 "count" 1 "title" "" "views" true) }}{{ end }}')
+    at = datetime.now().astimezone()
+    (site_dir / 'data' / 'pageviews.json').write_text(json.dumps({'pages': {
+        '/2024/05/hello-markdown': {'views': 9, 'at': (at - timedelta(days=200)).isoformat(timespec='seconds')},
+        '/posts/2024/07/with-embed': {'views': 5, 'at': at.isoformat(timespec='seconds')},
+        '/2010/01/legacy': {'views': 4, 'at': at.isoformat(timespec='seconds')}}}))
+    top = home()
+    assert 'embedded video' in top and 'Hello, Markdown' not in top and 'legacy HTML' not in top and '<h2>' not in top
+    assert '<span class="pageviews-top-views">5</span>' in top
+
+    # Without the file, or with nothing in it, the site builds and shows nothing.
+    for data in ('{}', '{"pages": {}}', None):
+        if data is None:
+            (site_dir / 'data' / 'pageviews.json').unlink()
+        else:
+            (site_dir / 'data' / 'pageviews.json').write_text(data)
+        assert 'pageviews-top' not in home()

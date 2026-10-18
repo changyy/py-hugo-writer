@@ -1,5 +1,13 @@
 # Changelog
 
+## 1.20261018.1224014
+
+- A Hugo partial for the most viewed posts, `pageviews-top.html`: a row of cards that scrolls
+  sideways (swipe, or `<` and `>`), each the post's featured image and title, or just the title
+  when it has no image; no scrollbar. Arguments: count, days (only recent counts), min, exclude,
+  title, views. Without `data/pageviews.json` it shows nothing and the site builds as before.
+- The demo site shows it on its home page.
+
 ## 1.20261018.1211357
 
 - The page views dialog links straight to GA4's Pages and screens report for the last 90 days: paste

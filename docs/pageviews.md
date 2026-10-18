@@ -6,6 +6,7 @@ One file, `data/pageviews.json`, and two pieces around it. Neither needs hugo-wr
 |------|--------------|
 | [`scripts/ga4_pageviews.py`](../scripts/ga4_pageviews.py) | Asks Google Analytics 4 for each page's views (or reads a report downloaded from it) and merges them into `data/pageviews.json` |
 | [`pageviews.html`](../examples/demo-site/layouts/partials/pageviews.html) | A Hugo partial that shows them: `1,245 次瀏覽（3 天前統計）` / `1,245 views (as of 3d ago)` |
+| [`pageviews-top.html`](../examples/demo-site/layouts/partials/pageviews-top.html) | A Hugo partial showing the most viewed posts as a row of cards, e.g. on the home page |
 
 hugo-writer shows the same numbers in its post list, sorts by them, and takes a report downloaded
 from GA4 to update the file (no Google sign-in; see below). The site never calls
@@ -105,6 +106,34 @@ partial to change it. "N 小時 / 天 / 個月 / 年前" is worked out at build 
 so it stays right between builds. Style it with `.pageviews`.
 
 Hugo 0.156+ notes `site.Data` as deprecated; on those versions it can be `hugo.Data`.
+
+### Popular posts
+
+Copy `pageviews-top.html` to `layouts/partials/` too, and call it where the list should go: the
+demo site's [`layouts/index.html`](../examples/demo-site/layouts/index.html) puts it on the home
+page; with PaperMod, `layouts/partials/home_info.html` (copied from the theme) is a good place.
+
+```go-html-template
+{{ partial "pageviews-top.html" (dict "count" 10 "days" 120) }}
+```
+
+| Argument | |
+|----------|---|
+| `count` | how many (default 10) |
+| `days` | only counts taken in the last N days (default 0, all). Counts are kept for pages a newer report leaves out, so without it a post read a lot long ago can stay on top |
+| `min` | fewer views are left out (default `params.pageviews.min`, or 1) |
+| `exclude` | a page to leave out, e.g. `.` on a post's own page |
+| `title` | the heading (default 熱門文章 / Popular posts; `""` for none) |
+| `views` | `true` to show each post's views (default: not shown, only used for the order) |
+
+The posts of the site's main sections, most viewed first, as cards in a row that scrolls sideways
+(a swipe on a phone, `<` and `>` on the sides). A card shows the post's featured image and title,
+or only the title, larger, when it has none or the image doesn't load; all cards are the same size.
+The featured image is `cover.image` (PaperMod) or the first of `images`: a full URL, a file in the
+post's folder, or a path from the site root.
+Without `data/pageviews.json`, or with no post in it, it prints nothing and the site builds as
+before. Its CSS comes with it and uses PaperMod's colors (light and dark) when they are there;
+override `.pageviews-top-*` to change it.
 
 ## 4. Every day, on GitHub Actions
 
