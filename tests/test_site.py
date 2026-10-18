@@ -254,7 +254,7 @@ def test_rename_a_static_image(site):
 @pytest.mark.parametrize('text, field, image, after', [
     # YAML, Hugo's "images"
     ('---\ntitle: x\n---\nbody', 'images', 'a.webp', '---\ntitle: x\nimages: ["a.webp"]\n---\nbody'),
-    ('---\ntitle: x\nimages:\n  - old.png\n  - two.png\ntags: []\n---\nb', 'images', 'a.webp', '---\ntitle: x\nimages: ["a.webp"]\ntags: []\n---\nb'),
+    ('---\ntitle: x\nimages:\n  - old.png\n  - two.png\ntags: []\n---\nb', 'images', 'a.webp', '---\ntitle: x\nimages:\n  - "a.webp"\ntags: []\n---\nb'),
     ('---\ntitle: x\nimages: ["a.webp"]\n---\nb', 'images', None, '---\ntitle: x\n---\nb'),
     # YAML, PaperMod's nested "cover.image", other cover keys kept
     ('---\ntitle: x\n---\nb', 'cover.image', 'a.webp', '---\ntitle: x\ncover:\n  image: "a.webp"\n---\nb'),
@@ -283,6 +283,53 @@ def test_featured_in_json_and_reading_lists():
         set_featured('---\ncover: {image: a}\n---\n', 'cover.image', 'b.webp')
     with pytest.raises(SiteError):
         set_featured('---\n---\n', 'a.b.c', 'x')
+
+
+@pytest.mark.parametrize('text, tags', [
+    ('---\ntags: []\n---\n', []),
+    ('---\ntags: [go, "a, b", \'it\'\'s\']\n---\n', ['go', 'a, b', "it's"]),
+    ('---\ntags:\n  - go\n  - "嵌入式"\n---\n', ['go', '嵌入式']),
+    ('---\ntags:\n- go\n---\n', ['go']),
+    ('---\ntags: solo\n---\n', ['solo']),
+    ('---\ntitle: x\n---\n', []),
+    ('+++\ntags = ["go", 2024]\n+++\n', ['go', '2024']),
+    ('{\n  "tags": ["go"]\n}\n', ['go']),
+    ('no front matter', []),
+])
+def test_get_tags(text, tags):
+    from hugo_writer.site import get_tags
+    assert get_tags(text) == tags
+
+
+@pytest.mark.parametrize('text, tags, after', [
+    ('---\ntitle: x\ntags: []\n---\nb', ['go', '嵌入式'], '---\ntitle: x\ntags: ["go", "嵌入式"]\n---\nb'),
+    ('---\ntitle: x\n---\nb', ['go'], '---\ntitle: x\ntags: ["go"]\n---\nb'),
+    ('---\ntags: ["go"]\ndraft: true\n---\nb', [], '---\ntags: []\ndraft: true\n---\nb'),
+    # one "- item" per line stays that way, with its indent
+    ('---\ntags:\n  - go\n  - old\ndraft: true\n---\nb', ['go', 'new'], '---\ntags:\n  - "go"\n  - "new"\ndraft: true\n---\nb'),
+    ('+++\ntitle = "x"\ntags = ["go"]\n[cover]\nimage = "a"\n+++\nb', ['a', 'b'], '+++\ntitle = "x"\ntags = ["a", "b"]\n[cover]\nimage = "a"\n+++\nb'),
+    ('{\n  "title": "x"\n}\n\nb', ['go'], '{\n  "title": "x",\n  "tags": [\n    "go"\n  ]\n}\n\nb'),
+])
+def test_set_tags(text, tags, after):
+    from hugo_writer.site import get_tags, set_featured
+    assert set_featured(text, 'tags', tags) == after
+    assert get_tags(after) == tags
+
+
+def test_site_tags(site):
+    text = site.set_front(BUNDLE, 'tags', [' demo ', 'Go', 'go', 'two  words', ''])
+    assert 'tags: ["demo", "Go", "two words"]' in text           # trimmed, repeats (any case) dropped
+    with pytest.raises(SiteError):
+        site.set_front(BUNDLE, 'tags', 'demo')
+    with pytest.raises(SiteError):
+        site.set_front(BUNDLE, 'title', ['x'])
+
+
+@needs_hugo
+def test_site_tag_counts(site):
+    site.set_front(BUNDLE, 'tags', ['Go', 'demo'])
+    site.set_front(DRAFT, 'tags', ['go'])                         # newer than BUNDLE: its spelling wins
+    assert site.tags() == [{'name': 'go', 'count': 2}, {'name': 'demo', 'count': 1}]
 
 
 def test_site_featured_uses_the_setting(site_dir):

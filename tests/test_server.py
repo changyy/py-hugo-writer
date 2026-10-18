@@ -191,6 +191,21 @@ def test_featured_api(app):
 
 
 @needs_hugo
+def test_tags_api(app):
+    _, _, data = request(app, 'GET', f'/api/post?path={BUNDLE}')
+    post = json.loads(data)
+    assert post['tags'] == ['demo']
+    body = json.dumps({'path': BUNDLE, 'field': 'tags', 'value': ['demo', '筆記'], 'version': post['version']})
+    status, _, data = request(app, 'POST', '/api/front', body, WRITE)
+    res = json.loads(data)
+    assert status == 200 and res['tags'] == ['demo', '筆記'] and 'tags: ["demo", "筆記"]' in res['text']
+    _, _, data = request(app, 'GET', '/api/tags')
+    assert {'name': '筆記', 'count': 1} in json.loads(data)['tags']
+    bad = json.dumps({'path': BUNDLE, 'field': 'tags', 'value': 'demo'})
+    assert request(app, 'POST', '/api/front', bad, WRITE)[0] == 400
+
+
+@needs_hugo
 def test_post_versions_and_conflicts(app):
     _, _, data = request(app, 'GET', f'/api/post?path={BUNDLE}')
     post = json.loads(data)

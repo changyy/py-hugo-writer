@@ -101,7 +101,13 @@ main { display: flex; flex-direction: column; min-width: 0; min-height: 0; }
 #post-info .featured select { min-width: 0; max-width: 360px; }
 #post-info .featured img { width: 48px; height: 36px; object-fit: cover; border-radius: 3px; background: var(--code); }
 #post-info .hint { grid-column: 1 / -1; color: var(--draft); font-size: 12px; }
-@media (max-width: 900px) { #post-info { grid-template-columns: auto 1fr; } #post-info .featured { grid-column: 2; } }
+#post-info .tags { grid-column: 2 / -1; display: flex; flex-wrap: wrap; gap: 6px; align-items: center; min-width: 0; }
+#post-info .tag { display: inline-flex; align-items: center; gap: 2px; padding: 2px 4px 2px 10px; border-radius: 12px;
+  background: var(--code); border: 1px solid var(--border); white-space: nowrap; }
+#post-info .tag button { border: 0; background: none; padding: 0 6px; color: var(--muted); cursor: pointer; }
+#post-info .tag button:hover { color: inherit; }
+#post-info #info-tag-input { flex: 1; min-width: 140px; width: auto; }
+@media (max-width: 900px) { #post-info { grid-template-columns: auto 1fr; } #post-info .featured, #post-info .tags { grid-column: 2; } }
 #front { border-bottom: 1px solid var(--border); }
 #front summary { padding: 6px 12px; cursor: pointer; color: var(--muted); font-size: 12px; user-select: none; }
 #front-text { display: block; width: 100%; min-height: 120px; resize: vertical; border: 0; border-top: 1px solid var(--border); outline: none;
@@ -226,6 +232,11 @@ dialog p { margin: 0 0 16px; line-height: 1.5; }
           <button id="info-upload" data-i18n="infoUpload"></button>
           <input type="file" id="info-file" accept="image/*" hidden>
         </div>
+        <span data-i18n="infoTags"></span>
+        <div class="tags" id="info-tags">
+          <input type="text" id="info-tag-input" list="tag-list" autocomplete="off" data-i18n-placeholder="tagAdd">
+        </div>
+        <datalist id="tag-list"></datalist>
       </div>
       <details id="front" hidden><summary data-i18n="frontMatter"></summary><textarea id="front-text" spellcheck="false"></textarea></details>
       <div id="wysiwyg" hidden></div>
@@ -361,6 +372,7 @@ const I18N = {
     renameSkipped: 'These posts link to the image but are not Markdown, so they were not updated:\n\n{posts}',
     confirmDeleteRefs: 'Delete {name}?\n\nIt is used by {n} post(s), which will show a broken image:\n{posts}',
     infoTitle: 'Title', infoUrl: 'URL', infoFeatured: 'Featured image', infoUpload: 'Upload…',
+    infoTags: 'Tags', tagAdd: 'Add a tag (Enter or comma)', tagRemove: 'Remove {tag}',
     featuredNone: 'None', featuredUrlPlaceholder: 'from the site\'s permalinks: {url}',
     urlChangeWarn: 'This post is published. Changing its URL breaks links to {old}. Change it anyway?',
     setFeaturedField: 'Featured image is saved as', setFeaturedImages: 'images (Hugo, for link previews)',
@@ -410,6 +422,7 @@ const I18N = {
     renameSkipped: '以下文章也引用這張圖，但不是 Markdown，沒有自動更新：\n\n{posts}',
     confirmDeleteRefs: '刪除 {name}？\n\n有 {n} 篇文章使用它，刪除後會變成破圖：\n{posts}',
     infoTitle: '標題', infoUrl: '網址', infoFeatured: '代表圖片', infoUpload: '上傳…',
+    infoTags: '標籤', tagAdd: '新增標籤（Enter 或逗號）', tagRemove: '移除 {tag}',
     featuredNone: '無', featuredUrlPlaceholder: '依網站的 permalinks：{url}',
     urlChangeWarn: '這篇文章已發布，改網址會讓指向 {old} 的連結失效。確定要改嗎？',
     setFeaturedField: '代表圖片寫入的欄位', setFeaturedImages: 'images（Hugo 標準，用於分享預覽）',
@@ -469,7 +482,7 @@ document.querySelectorAll('[data-i18n-placeholder]').forEach(el => { el.placehol
 
 const $ = id => document.getElementById(id);
 const state = {
-  info: null, posts: [], current: null,
+  info: null, posts: [], current: null, tags: [],
   view: new URLSearchParams(location.search).get('view') || load('view') || 'wysiwyg',  // wysiwyg | source | preview
   split: load('split') === '1',
   dirty: false, timer: null, loading: false, savedText: null,
@@ -994,7 +1007,7 @@ async function saveNow() {
     state.savedText = text;
     post.version = res.version;
     if (res.url !== undefined) {               // the front matter changed: title, url, slug, date …
-      post.front_title = res.front_title; post.front_url = res.front_url; post.featured = res.featured;
+      post.front_title = res.front_title; post.front_url = res.front_url; post.featured = res.featured; post.tags = res.tags;
       moved(res.url);
     }
     status(t('saved', { time: time() }));
@@ -1411,6 +1424,55 @@ function renderPostInfo() {
   $('info-url-hint').hidden = !pattern;
   if (pattern) $('info-url-hint').textContent = t('urlHint', { pattern, url: post.url || '?' });
   renderFeatured();
+  renderTags();
+}
+
+function renderTags() {
+  const post = state.current;
+  if (!post?.editable) return;
+  const chips = (post.tags || []).map(tag => {
+    const chip = document.createElement('span'), x = document.createElement('button');
+    chip.className = 'tag';
+    chip.textContent = tag;
+    x.textContent = '✕'; x.title = t('tagRemove', { tag }); x.setAttribute('aria-label', x.title);
+    x.onclick = () => setTags(tags => tags.filter(t => t !== tag));
+    chip.append(x);
+    return chip;
+  });
+  $('info-tags').replaceChildren(...chips, $('info-tag-input'));
+  // Suggest the site's tags this post doesn't have yet, the most used first.
+  const have = new Set((post.tags || []).map(t => t.toLowerCase()));
+  $('tag-list').replaceChildren(...state.tags.filter(t => !have.has(t.name.toLowerCase()))
+    .map(t => new Option(`${t.name} (${t.count})`, t.name)));
+}
+
+async function loadTags() {
+  try { state.tags = (await api('GET', '/api/tags')).tags; } catch { state.tags = []; }
+  renderTags();
+}
+
+// change(tags) -> new tags. Changes run one after another, each on the tags (and version) the
+// previous one left, so quick clicks don't race each other into a conflict.
+function setTags(change) {
+  const post = state.current;
+  state.tagging = (state.tagging || Promise.resolve()).then(async () => {
+    if (state.current !== post) return;
+    const res = await setFront('tags', change(post.tags || []));
+    if (res) {
+      post.tags = res.tags;
+      // A tag new to the site joins the suggestions.
+      if (res.tags.some(tag => !state.tags.some(t => t.name.toLowerCase() === tag.toLowerCase()))) loadTags();
+    }
+    renderTags();
+  });
+}
+
+// Adds what is typed (or pasted: "a, b, c") to the post's tags.
+function addTypedTags() {
+  const input = $('info-tag-input');
+  const typed = input.value.split(/[,，、]/).map(s => s.trim()).filter(Boolean);
+  input.value = '';
+  if (typed.length && state.current?.editable) setTags(tags => [...tags, ...typed]);   // the server drops repeats
 }
 
 function renderFeatured() {
@@ -1478,6 +1540,18 @@ $('info-url').addEventListener('change', async () => {
 });
 ['info-title', 'info-url'].forEach(id => $(id).addEventListener('keydown', e => { if (e.key === 'Enter') e.target.blur(); }));
 $('info-featured').onchange = () => setFront('featured', $('info-featured').value).then(renderFeatured);
+$('info-tag-input').addEventListener('keydown', e => {
+  if (e.isComposing) return;                       // Enter picks the IME candidate, not the tag
+  if (e.key === 'Enter' || e.key === ',') { e.preventDefault(); addTypedTags(); }
+  else if (e.key === 'Backspace' && !e.target.value && state.current?.tags?.length) setTags(tags => tags.slice(0, -1));
+});
+$('info-tag-input').addEventListener('compositionend', e => { if (/[，、]/.test(e.target.value)) addTypedTags(); });
+$('info-tag-input').addEventListener('input', e => {
+  // Picked from the suggestions, or typed a full-width comma.
+  if (e.isComposing) return;
+  if (e.inputType === 'insertReplacementText' || !e.inputType || /[，、]/.test(e.target.value)) addTypedTags();
+});
+$('info-tag-input').addEventListener('blur', addTypedTags);
 $('info-upload').onclick = () => $('info-file').click();
 $('info-file').onchange = async () => {
   const file = $('info-file').files[0];
@@ -1563,6 +1637,7 @@ layout();
     $('about').title = 'pypi.org/project/hugo-writer';
     $('imgsize').options[0].textContent = t('sizeOriginal', { max: state.info.settings.image_max_width });
     await loadPosts();
+    loadTags();
     // ?open=content/posts/…/index.md opens a post directly (handy for bookmarks).
     const open = new URLSearchParams(location.search).get('open');
     if (open) await openPost(open);

@@ -1,5 +1,12 @@
 # Changelog
 
+## 1.20261018.1102747
+
+- Tags above the editor: the post's tags as chips; type one and press Enter or a comma (`，` and `、`
+  too) to add it, ✕ or Backspace to remove one. The site's tags are suggested, the most used first.
+  Written to the front matter in YAML, TOML or JSON; a list written one `- item` per line stays that way.
+- Tags are trimmed and kept once, whatever their case (Hugo puts `Go` and `go` on one page).
+
 ## 1.20261017.1220639
 
 - Edits made elsewhere (another editor, an AI tool, git) are no longer overwritten: every save carries

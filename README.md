@@ -31,7 +31,7 @@ to your content folder. No server to host, no account, no database — just your
 | 3 | Side-by-side preview while you write | the preview reloads on every save |
 | 4 | Markdown throughout: code fences, tables, lists, links | posts stay plain `.md` files |
 | 5 | Drafts | new posts start as drafts; one checkbox flips `draft` in the front matter |
-| 5a | Title, URL and featured image above the editor | written to the front matter (YAML, TOML or JSON), the rest of it kept |
+| 5a | Title, URL, featured image and tags above the editor | written to the front matter (YAML, TOML or JSON), the rest of it kept; the site's tags are suggested |
 | 6 | Drop or paste images (screenshots too) | scaled to 1024 px (or 512 / 256 / 128), re-encoded as WebP, EXIF / GPS removed (and reported), named after the post, saved next to it |
 | 7 | Move and align images in the WYSIWYG view | drag an image elsewhere; click it for Left / Center / Right |
 | 8 | Image panel per post, and an image library for the whole site | thumbnails, which posts use each image, rename to `{slug}-NN`, delete what nothing uses |
@@ -100,13 +100,19 @@ interfere with a `hugo server` you already run), then opens the editor at
   load the file or keep your version. With no unsaved edits, coming back to the window simply loads
   the file again.
 
-### 3. Title, URL and featured image
+### 3. Title, URL, featured image and tags
 
 Above the editor: the post's **title**, its **URL** (the front matter `url`; empty means
 Hugo's permalinks decide — changing it on a published post asks first, since old links
-break) and its **featured image**: none, one of the post's images, or one you upload just
-for that (it is not inserted into the text). By default the first image dropped into a post
-without one becomes it.
+break), its **featured image**: none, one of the post's images, or one you upload just
+for that (it is not inserted into the text) — and its **tags**. By default the first image
+dropped into a post without one becomes the featured image.
+
+Tags show as chips: type one and press Enter or a comma to add it (pasting `a, b, c` adds
+three), click ✕ or press Backspace in the empty box to remove one. The tags already used on
+the site are suggested as you type, the most used first. They are written to `tags` in the
+front matter, `tags: ["go", "hugo"]`, or one `- item` per line if the post had them that way.
+A tag is added once whatever its case, since Hugo puts `Go` and `go` on the same page.
 
 If the site's settings give new posts a `url` but this post has none (say a tool swapped it for
 `slug`), a note under the URL field says so and shows where Hugo will publish it.

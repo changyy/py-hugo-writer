@@ -11,7 +11,7 @@ from urllib.parse import parse_qs, urlsplit
 
 from . import images
 from ._version import __version__
-from .site import Conflict, SiteError, atomic_write, front_matter, get_featured, has_raw_html, version
+from .site import Conflict, SiteError, atomic_write, front_matter, get_featured, get_tags, has_raw_html, version
 
 # Every request that changes files must carry this header. A web page on another
 # origin can't add a custom header without a CORS preflight, which we never grant,
@@ -161,7 +161,7 @@ class Handler(BaseHTTPRequestHandler):
         site = self.server.site
         text = site.read(rel)
         editable = site.resolve(rel).suffix.lower() in ('.md', '.markdown')
-        front = self._front(text) if editable else {'featured': None, 'front_title': None, 'front_url': None}
+        front = self._front(text) if editable else {'featured': None, 'front_title': None, 'front_url': None, 'tags': []}
         # url: the permalink right now, so a post whose url / slug changed elsewhere previews where it lives.
         self._json({'path': rel, 'text': text, 'editable': editable, 'has_html': editable and has_raw_html(text),
                     'version': version(text), 'url': site.url_of(rel), **front})
@@ -173,6 +173,10 @@ class Handler(BaseHTTPRequestHandler):
                 front[name] = get_featured(text, key)
             except (SiteError, ValueError):
                 front[name] = None
+        try:
+            front['tags'] = get_tags(text)
+        except (SiteError, ValueError):
+            front['tags'] = []
         return front
 
     def set_featured(self):
@@ -181,11 +185,14 @@ class Handler(BaseHTTPRequestHandler):
         self._json({'text': text, 'version': version(text), 'featured': site.featured(data.get('path', ''))})
 
     def set_front(self):
-        # {path, field: title | url | featured, value, version}
+        # {path, field: title | url | featured | tags, value (a list for tags), version}
         data, site = json.loads(self._body()), self.server.site
         rel = data.get('path', '')
         text = site.set_front(rel, data.get('field', ''), data.get('value'), data.get('version'))
-        self._json({'text': text, 'version': version(text), 'featured': site.featured(rel)})
+        self._json({'text': text, 'version': version(text), 'featured': site.featured(rel), 'tags': get_tags(text)})
+
+    def list_tags(self):
+        self._json({'tags': self.server.site.tags()})
 
     def save_post(self):
         # {path, text, version}: version is what the editor loaded; a different file on disk is a 409.
@@ -257,7 +264,8 @@ class Handler(BaseHTTPRequestHandler):
 
 
 GET_ROUTES = {'/': Handler.index, '/api/info': Handler.info, '/api/posts': Handler.list_posts,
-              '/api/post': Handler.get_post, '/api/images': Handler.list_images, '/api/library': Handler.library}
+              '/api/post': Handler.get_post, '/api/images': Handler.list_images, '/api/library': Handler.library,
+              '/api/tags': Handler.list_tags}
 POST_ROUTES = {'/api/post': Handler.create_post, '/api/draft': Handler.draft, '/api/image': Handler.upload_image,
                '/api/image/delete': Handler.delete_image, '/api/image/rename': Handler.rename_image,
                '/api/library/delete': Handler.library_delete, '/api/settings': Handler.save_settings,

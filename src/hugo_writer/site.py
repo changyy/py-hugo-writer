@@ -209,11 +209,26 @@ class Site:
         """Set (or with None, remove) the post's featured image in its front matter."""
         return self.set_front(rel, 'featured', image)
 
-    def set_front(self, rel: str, field: str, value: str | None, expect: str | None = None) -> str:
-        """Set one of the post's settings in its front matter: title, url or featured (image).
+    def set_front(self, rel: str, field: str, value: str | list[str] | None, expect: str | None = None) -> str:
+        """Set one of the post's settings in its front matter: title, url, featured (image) or tags.
 
-        An empty url or featured removes the key (Hugo's permalinks / no image); a title can't be empty.
+        An empty url or featured removes the key (Hugo's permalinks / no image); a title can't be empty;
+        tags is a list (empty: tags: []), each tag trimmed and kept once (Hugo ignores case).
         """
+        if field == 'tags':
+            if not isinstance(value, list) or not all(isinstance(v, str) for v in value):
+                raise SiteError('tags must be a list of strings')
+            tags, seen = [], set()
+            for tag in (' '.join(v.split()) for v in value):
+                if tag and tag.lower() not in seen:
+                    seen.add(tag.lower())
+                    tags.append(tag)
+            self.check(rel, expect)
+            text = set_featured(self.read(rel), 'tags', tags)
+            self.write(rel, text)
+            return text
+        if not isinstance(value, (str, type(None))):
+            raise SiteError(f'{field} must be a string')
         value = (value or '').strip() or None
         if field == 'title':
             if not value:
@@ -233,6 +248,22 @@ class Site:
         text = set_featured(self.read(rel), key, value)
         self.write(rel, text)
         return text
+
+    def tags(self) -> list[dict]:
+        """Every tag on the site with the number of posts using it, the most used first."""
+        counts, names = {}, {}
+        for p in self.posts(max_age=5):
+            try:
+                text = (self.root / p['path']).read_text(encoding='utf-8', errors='replace')
+                tags = get_tags(text)
+            except (OSError, SiteError, ValueError):     # broken front matter: Hugo reports it, not us
+                continue
+            for tag in tags:
+                key = tag.lower()                      # Hugo puts "Go" and "go" on one page
+                counts[key] = counts.get(key, 0) + 1
+                names.setdefault(key, tag)             # spelled as in the newest post
+        return sorted(({'name': names[k], 'count': n} for k, n in counts.items()),
+                      key=lambda t: (-t['count'], t['name'].lower()))
 
     def create(self, title: str, slug: str, now: datetime | None = None) -> str:
         title = title.strip()
@@ -468,16 +499,6 @@ def _featured_keys(field: str) -> list[str]:
     return keys
 
 
-def _scalar(raw: str) -> str:
-    raw = raw.strip()
-    if raw.startswith('[') and raw.endswith(']'):
-        items = [i.strip() for i in raw[1:-1].split(',') if i.strip()]
-        raw = items[0] if items else ''
-    if len(raw) >= 2 and raw[0] == raw[-1] and raw[0] in '"\'':
-        raw = raw[1:-1]
-    return raw
-
-
 def _yaml_block(lines: list[str], key: str, start: int = 0, end: int | None = None, indent: str = '') -> tuple[int, int] | None:
     """[first, last) lines of `key:` at this indent and the lines that belong to it."""
     end = len(lines) if end is None else end
@@ -492,26 +513,39 @@ def _yaml_block(lines: list[str], key: str, start: int = 0, end: int | None = No
     return None
 
 
-def get_featured(text: str, field: str) -> str | None:
+def _unquote(raw: str) -> str:
+    raw = raw.strip()
+    if len(raw) >= 2 and raw[0] == raw[-1] == '"':
+        return re.sub(r'\\(.)', r'\1', raw[1:-1])
+    if len(raw) >= 2 and raw[0] == raw[-1] == "'":
+        return raw[1:-1].replace("''", "'")
+    return raw
+
+
+def _yaml_value(raw: str) -> str | list[str]:
+    """An inline YAML value: a scalar, or a flow list like [a, "b, c"]."""
+    raw = raw.strip()
+    if not (raw.startswith('[') and raw.endswith(']')):
+        return _unquote(raw)
+    items = re.findall(r'\s*("(?:[^"\\]|\\.)*"|\'(?:[^\']|\'\')*\'|[^,]+)', raw[1:-1])
+    return [v for v in (_unquote(i) for i in items) if v]
+
+
+def get_value(text: str, field: str) -> str | list[str] | None:
+    """A front matter value at key or parent.key: a string, a list of strings, or None."""
     keys = _featured_keys(field)
     end = front_matter_end(text)
     if not end:
         return None
     front = text[:end]
-    if front.startswith('{'):
-        value = json.loads(front)
+    if front.startswith('{') or FRONT_MATTER.match(text).group(1) == '+++':
+        value = json.loads(front) if front.startswith('{') else tomllib.loads(FRONT_MATTER.match(text).group(2))
         for k in keys:
             value = value.get(k) if isinstance(value, dict) else None
-        value = value[0] if isinstance(value, list) and value else value
-        return value if isinstance(value, str) and value else None
-    m = FRONT_MATTER.match(text)
-    if m.group(1) == '+++':
-        value = tomllib.loads(m.group(2))
-        for k in keys:
-            value = value.get(k) if isinstance(value, dict) else None
-        value = value[0] if isinstance(value, list) and value else value
-        return value if isinstance(value, str) and value else None
-    lines = m.group(2).split('\n')
+        if isinstance(value, list):                     # tags = [2024, "go"]: numbers are tags too
+            return [str(v) for v in value if isinstance(v, (str, int, float)) and not isinstance(v, bool)]
+        return value if isinstance(value, str) else None
+    lines = FRONT_MATTER.match(text).group(2).split('\n')
     block = _yaml_block(lines, keys[0])
     if not block:
         return None
@@ -523,11 +557,19 @@ def get_featured(text: str, field: str) -> str | None:
     first, last = block
     inline = lines[first].split(':', 1)[1].strip()
     if inline:
-        return _scalar(inline) or None
-    for line in lines[first + 1:last]:
-        if line.strip().startswith('- '):
-            return _scalar(line.strip()[2:]) or None
-    return None
+        return _yaml_value(inline)
+    return [v for v in (_unquote(l.strip()[2:]) for l in lines[first + 1:last] if l.strip().startswith('- ')) if v]
+
+
+def get_featured(text: str, field: str) -> str | None:
+    value = get_value(text, field)
+    value = value[0] if isinstance(value, list) and value else value
+    return value if isinstance(value, str) and value else None
+
+
+def get_tags(text: str) -> list[str]:
+    value = get_value(text, 'tags')
+    return value if isinstance(value, list) else [value] if value else []
 
 
 def _child_indent(lines, block) -> str:
@@ -537,9 +579,11 @@ def _child_indent(lines, block) -> str:
     return '  '
 
 
-def set_featured(text: str, field: str, image: str | None) -> str:
+def set_featured(text: str, field: str, image: str | list[str] | None) -> str:
+    """Set a front matter value (None removes it); a string under `images` is written as a list."""
     keys = _featured_keys(field)
-    listy = keys[-1] == 'images'
+    if isinstance(image, str) and keys[-1] == 'images':
+        image = [image]
     end = front_matter_end(text)
     if not end:
         if image is None:
@@ -557,30 +601,38 @@ def set_featured(text: str, field: str, image: str | None) -> str:
             if len(keys) == 2 and keys[0] in data and not data[keys[0]]:
                 del data[keys[0]]
         else:
-            target[keys[-1]] = [image] if listy else image
+            target[keys[-1]] = image
         return json.dumps(data, ensure_ascii=False, indent=2) + text[end:]
     m = FRONT_MATTER.match(text)
     fence, body = m.group(1), m.group(2)
     lines = body.split('\n') if body else []
-    value = (f'[{quote(image)}]' if listy else quote(image)) if image is not None else None
+    if isinstance(image, list):
+        value = '[' + ', '.join(quote(i) for i in image) + ']'
+    else:
+        value = quote(image) if image is not None else None
     if fence == '+++':
         lines = _set_toml(lines, keys, value)
     else:
-        lines = _set_yaml(lines, keys, value)
+        lines = _set_yaml(lines, keys, value, image if isinstance(image, list) else None)
     new_body = '\n'.join(lines)
     return text[:m.start(2)] + new_body + text[m.end(2):]
 
 
-def _set_yaml(lines, keys, value):
+def _set_yaml(lines, keys, value, items=None):
     block = _yaml_block(lines, keys[0])
     if len(keys) == 1:
+        new = [f'{keys[0]}: {value}'] if value is not None else []
         if block:
+            # A list written one "- item" per line stays that way.
+            dashes = [l for l in lines[block[0] + 1:block[1]] if l.lstrip().startswith('- ')]
+            if items and dashes and not lines[block[0]].split(':', 1)[1].strip():
+                indent = dashes[0][:len(dashes[0]) - len(dashes[0].lstrip())]
+                new = [f'{keys[0]}:'] + [f'{indent}- {quote(i)}' for i in items]
             del lines[block[0]:block[1]]
             at = block[0]
         else:
             at = len(lines)
-        if value is not None:
-            lines.insert(at, f'{keys[0]}: {value}')
+        lines[at:at] = new
         return lines
     if block and lines[block[0]].split(':', 1)[1].strip():
         raise SiteError(f'{keys[0]} is written inline in the front matter; change it in the source view')
