@@ -80,6 +80,8 @@ hugo-writer [SITE] [--port 8765] [--hugo hugo] [--no-preview] [--no-browser]
 (drafts and future posts included, rendered in memory, on its own port — it does not
 interfere with a `hugo server` you already run), then opens the editor at
 `http://127.0.0.1:8765/`. Both listen on 127.0.0.1 only. Ctrl+C stops both.
+**Preview the site ↗** under the site name opens that `hugo server` in a new tab: the home page,
+menus and lists as they will look, drafts included.
 
 | Option | Meaning |
 |--------|---------|

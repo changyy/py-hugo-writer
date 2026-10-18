@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.20261018.1225050
+
+- "Preview the site ↗" under the site name opens the private `hugo server` in a new tab: the home
+  page, menus and lists as they will look, drafts included. The page views dialog links to the
+  home page next to where the popular posts are. Not shown with `--no-preview`.
+
 ## 1.20261018.1225024
 
 - A switch for the popular posts in the page views dialog, "Show the popular posts on the site":
